@@ -534,54 +534,293 @@ class RideRequests extends StatelessWidget{
   );
 }
 
-class ActiveRide extends StatefulWidget{
-  final String? rideId;final Position? position;final Future<void> Function(String) onCall;final Future<void> Function(DocumentReference) onComplete;
-  const ActiveRide({super.key,required this.rideId,required this.position,required this.onCall,required this.onComplete});
-  @override State<ActiveRide> createState()=>_ActiveRideState();
-}
-class _ActiveRideState extends State<ActiveRide>{
-  List<LatLng> route=[];LatLng? pickup,destination,driver,customer;bool routeLoading=false;
-  double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
-  @override Widget build(BuildContext c){
-    if(widget.rideId==null)return const Center(child:Text('No active ride.'));
-    return StreamBuilder<DocumentSnapshot<Map<String,dynamic>>>(
-      stream:FirebaseFirestore.instance.collection('autoRideRequests').doc(widget.rideId).snapshots(),
-      builder:(context,s){
-        if(!s.hasData)return const Center(child:CircularProgressIndicator());
-        final x=s.data!.data()??{};
-        pickup=_point(x['pickupLatitude']??x['pickupLat'],x['pickupLongitude']??x['pickupLng']);
-        destination=_point(x['destinationLatitude']??x['destLat'],x['destinationLongitude']??x['destLng']);
-        driver=_point(x['driverLat'],x['driverLng']);
-        customer=_point(x['customerLat']??x['pickupLatitude'],x['customerLng']??x['pickupLongitude']);
-        if(route.isEmpty&&pickup!=null&&destination!=null&&!routeLoading){routeLoading=true;_route(pickup!,destination!);}
-        final center=driver??pickup??destination??const LatLng(25.4358,81.8463);
-        final marks=<Marker>[
-          if(driver!=null)Marker(point:driver!,width:62,height:62,child:const Pin(color:purple,icon:Icons.two_wheeler)),
-          if(customer!=null)Marker(point:customer!,width:58,height:58,child:const Pin(color:Colors.blue,icon:Icons.person)),
-          if(pickup!=null)Marker(point:pickup!,width:58,height:58,child:const Pin(color:Colors.green,icon:Icons.check)),
-          if(destination!=null)Marker(point:destination!,width:58,height:58,child:const Pin(color:Colors.red,icon:Icons.flag)),
-        ];
-        final phone=(x['customerPhone']??x['phone']??'').toString();
-        return Stack(children:[
-          FlutterMap(options:MapOptions(initialCenter:center,initialZoom:14.5),children:[TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',maxZoom:19,userAgentPackageName:'com.allways.carrier'),if(route.isNotEmpty)PolylineLayer(polylines:[Polyline(points:route,color:purple,strokeWidth:5)]),MarkerLayer(markers:marks)]),
-          Positioned(top:12,left:12,right:12,child:SafeArea(bottom:false,child:Card(color:const Color(0xFFFDECEF),child:Padding(padding:const EdgeInsets.all(13),child:Row(children:[const Icon(Icons.circle,color:Colors.green,size:12),const SizedBox(width:8),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('Live ride tracking',style:TextStyle(fontWeight:FontWeight.w900)),Text((x['status']??'accepted').toString(),style:const TextStyle(color:Colors.grey,fontSize:12))])),if(phone.isNotEmpty)IconButton(onPressed:()=>widget.onCall(phone),icon:const Icon(Icons.call))]))))),
-          Positioned(left:12,right:12,bottom:14,child:SafeArea(top:false,child:Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text((x['pickupAddress']??'Pickup').toString(),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w800)),
-            Text((x['destinationAddress']??'Destination').toString(),maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:Colors.grey)),
-            const SizedBox(height:10),SizedBox(width:double.infinity,child:FilledButton(onPressed:()=>widget.onComplete(s.data!.reference),style:FilledButton.styleFrom(backgroundColor:Colors.green),child:const Text('Complete ride'))),
-          ])))),
-        ]);
-      },
+class Pin extends StatelessWidget {
+  final Color color;
+  final IconData icon;
+
+  const Pin({super.key, required this.color, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 4),
+        boxShadow: const [
+          BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 2)),
+        ],
+      ),
+      child: Icon(icon, color: Colors.white, size: 25),
     );
   }
-  LatLng? _point(dynamic a,dynamic b){final x=n(a),y=n(b);if(x==0&&y==0)return null;return LatLng(x,y);}
-  Future<void> _route(LatLng a,LatLng b)async{
-    try{
-      final uri=Uri.parse('https://router.project-osrm.org/route/v1/driving/'+a.longitude.toString()+','+a.latitude.toString()+';'+b.longitude.toString()+','+b.latitude.toString()+'?overview=full&geometries=geojson');
-      final r=await http.get(uri);if(r.statusCode!=200)return;final d=jsonDecode(r.body);final coords=d['routes']?[0]?['geometry']?['coordinates'];if(coords is! List)return;
-      final points=coords.whereType<List>().where((p)=>p.length>=2).map((p)=>LatLng((p[1] as num).toDouble(),(p[0] as num).toDouble())).toList();
-      if(mounted)setState(()=>route=points);
-    }catch(_){}
+}
+
+class ActiveRide extends StatefulWidget {
+  final String? rideId;
+  final Position? position;
+  final Future<void> Function(String) onCall;
+  final Future<void> Function(DocumentReference) onComplete;
+
+  const ActiveRide({
+    super.key,
+    required this.rideId,
+    required this.position,
+    required this.onCall,
+    required this.onComplete,
+  });
+
+  @override
+  State<ActiveRide> createState() => _ActiveRideState();
+}
+
+class _ActiveRideState extends State<ActiveRide> {
+  List<LatLng> route = [];
+  bool routeLoading = false;
+
+  double number(dynamic value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse((value ?? '').toString()) ?? 0;
+  }
+
+  LatLng? point(dynamic latitude, dynamic longitude) {
+    final lat = number(latitude);
+    final lng = number(longitude);
+    if (lat == 0 || lng == 0) return null;
+    return LatLng(lat, lng);
+  }
+
+  Future<void> loadRoute(LatLng start, LatLng end) async {
+    try {
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/driving/'
+        '${start.longitude},${start.latitude};'
+        '${end.longitude},${end.latitude}'
+        '?overview=full&geometries=geojson',
+      );
+      final response = await http.get(url);
+      if (response.statusCode != 200) return;
+
+      final body = jsonDecode(response.body);
+      final coordinates = body['routes']?[0]?['geometry']?['coordinates'];
+      if (coordinates is! List) return;
+
+      final points = coordinates
+          .whereType<List>()
+          .where((item) => item.length >= 2)
+          .map(
+            (item) => LatLng(
+              (item[1] as num).toDouble(),
+              (item[0] as num).toDouble(),
+            ),
+          )
+          .toList();
+
+      if (mounted) {
+        setState(() => route = points);
+      }
+    } catch (_) {}
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rideId = widget.rideId;
+    if (rideId == null || rideId.isEmpty) {
+      return const Center(child: Text('No active ride.'));
+    }
+
+    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+      stream: FirebaseFirestore.instance
+          .collection('autoRideRequests')
+          .doc(rideId)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        final data = snapshot.data!.data() ?? <String, dynamic>{};
+        final pickup = point(
+          data['pickupLatitude'] ?? data['pickupLat'],
+          data['pickupLongitude'] ?? data['pickupLng'],
+        );
+        final destination = point(
+          data['destinationLatitude'] ?? data['destLat'],
+          data['destinationLongitude'] ?? data['destLng'],
+        );
+        final driver = point(data['driverLat'], data['driverLng']);
+        final customer = point(
+          data['customerLat'] ?? data['pickupLatitude'],
+          data['customerLng'] ?? data['pickupLongitude'],
+        );
+
+        if (!routeLoading && route.isEmpty && pickup != null && destination != null) {
+          routeLoading = true;
+          loadRoute(pickup, destination);
+        }
+
+        final center =
+            driver ?? pickup ?? destination ?? const LatLng(25.4358, 81.8463);
+
+        final markers = <Marker>[
+          if (driver != null)
+            Marker(
+              point: driver,
+              width: 62,
+              height: 62,
+              child: const Pin(color: purple, icon: Icons.two_wheeler),
+            ),
+          if (customer != null)
+            Marker(
+              point: customer,
+              width: 58,
+              height: 58,
+              child: const Pin(color: Colors.blue, icon: Icons.person),
+            ),
+          if (pickup != null)
+            Marker(
+              point: pickup,
+              width: 58,
+              height: 58,
+              child: const Pin(color: Colors.green, icon: Icons.check),
+            ),
+          if (destination != null)
+            Marker(
+              point: destination,
+              width: 58,
+              height: 58,
+              child: const Pin(color: Colors.red, icon: Icons.flag),
+            ),
+        ];
+
+        final phone =
+            (data['customerPhone'] ?? data['phone'] ?? '').toString();
+        final status = (data['status'] ?? 'accepted').toString();
+        final pickupAddress =
+            (data['pickupAddress'] ?? 'Pickup').toString();
+        final destinationAddress =
+            (data['destinationAddress'] ?? 'Destination').toString();
+
+        return Stack(
+          children: [
+            FlutterMap(
+              options: MapOptions(
+                initialCenter: center,
+                initialZoom: 14.5,
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  maxZoom: 19,
+                  userAgentPackageName: 'com.allways.carrier',
+                ),
+                if (route.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: route,
+                        color: purple,
+                        strokeWidth: 5,
+                      ),
+                    ],
+                  ),
+                MarkerLayer(markers: markers),
+              ],
+            ),
+            Positioned(
+              top: 12,
+              left: 12,
+              right: 12,
+              child: SafeArea(
+                bottom: false,
+                child: Card(
+                  color: const Color(0xFFFDECEF),
+                  child: Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.circle,
+                          color: Colors.green,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Live ride tracking',
+                                style: TextStyle(fontWeight: FontWeight.w900),
+                              ),
+                              Text(
+                                status,
+                                style: const TextStyle(
+                                  color: Colors.grey,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (phone.isNotEmpty)
+                          IconButton(
+                            onPressed: () => widget.onCall(phone),
+                            icon: const Icon(Icons.call),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 12,
+              right: 12,
+              bottom: 14,
+              child: SafeArea(
+                top: false,
+                child: Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          pickupAddress,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text(
+                          destinationAddress,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton(
+                            onPressed: () =>
+                                widget.onComplete(snapshot.data!.reference),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: Colors.green,
+                            ),
+                            child: const Text('Complete ride'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
