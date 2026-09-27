@@ -44,29 +44,19 @@ class AllwaysCarrierApp extends StatelessWidget {
   );
 }
 
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
-  Future<bool> _allowed(User u) async {
-    final r=await FirebaseFirestore.instance.collection('ridePartners').doc(u.uid).get();
-    if(r.exists)return true;
-    final c=await FirebaseFirestore.instance.collection('customers').doc(u.uid).get();
-    final role=(c.data()?['role']??'').toString().toLowerCase();
-    return role=='carrier'||role=='rider';
-  }
-  @override Widget build(BuildContext context)=>StreamBuilder<User?>(
-    stream:FirebaseAuth.instance.authStateChanges(),
-    builder:(context,s){
-      if(s.data==null)return const CarrierLoginPage();
-      return FutureBuilder<bool>(
-        future:_allowed(s.data!),
-        builder:(context,a){
-          if(!a.hasData)return const Scaffold(body:Center(child:CircularProgressIndicator()));
-          if(a.data!=true){FirebaseAuth.instance.signOut();return const CarrierLoginPage(message:'This account is not a Carrier.');}
-          return CarrierShell(user:s.data!);
-        },
-      );
-    },
-  );
+class AuthGate extends StatelessWidget{
+ const AuthGate({super.key});
+ @override Widget build(BuildContext context)=>StreamBuilder<User?>(stream:FirebaseAuth.instance.authStateChanges(),builder:(context,s){
+  if(s.data==null)return const CarrierLoginPage();
+  return FutureBuilder<DocumentSnapshot<Map<String,dynamic>>>(future:FirebaseFirestore.instance.collection('ridePartners').doc(s.data!.uid).get(),builder:(context,a){
+   if(!a.hasData)return const Scaffold(body:Center(child:CircularProgressIndicator()));
+   if(!a.data!.exists)return PartnerRegistrationPage(user:s.data!);
+   final p=a.data!.data()??{};final approval=(p['approvalStatus']??'').toString().toLowerCase();
+   if(approval=='pending')return PendingApprovalPage(user:s.data!,rejected:false);
+   if(approval=='rejected')return PendingApprovalPage(user:s.data!,rejected:true,reason:(p['rejectionReason']??'').toString());
+   return CarrierShell(user:s.data!);
+  });
+ });
 }
 
 class CarrierLoginPage extends StatefulWidget {
