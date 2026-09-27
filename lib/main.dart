@@ -215,33 +215,287 @@ class _CarrierShellState extends State<CarrierShell>{
   }
 }
 
-class CarrierHome extends StatelessWidget{
-  final bool online;final Position? position;final String? activeRideId;final Future<void> Function(bool) onOnline;
-  const CarrierHome({super.key,required this.online,required this.position,required this.activeRideId,required this.onOnline});
-  @override Widget build(BuildContext c){
-    final center=position==null?const LatLng(25.4358,81.8463):LatLng(position!.latitude,position!.longitude);
-    return Stack(children:[
-      FlutterMap(options:MapOptions(initialCenter:center,initialZoom:14.5),children:[
-        TileLayer(urlTemplate:'https://tile.openstreetmap.org/{z}/{x}/{y}.png',maxZoom:19,userAgentPackageName:'com.allways.carrier'),
-        if(position!=null)MarkerLayer(markers:[Marker(point:center,width:64,height:64,child:Container(decoration:BoxDecoration(color:purple,shape:BoxShape.circle,border:Border.all(color:Colors.white,width:4),boxShadow:const[BoxShadow(color:Colors.black26,blurRadius:8)]),child:const Icon(Icons.two_wheeler,color:Colors.white,size:30)))]),
-      ]),
-      Positioned(top:12,left:12,right:12,child:SafeArea(bottom:false,child:Card(color:Colors.white,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[const CircleAvatar(backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.two_wheeler,color:purple)),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('ALLways Carrier',style:TextStyle(fontWeight:FontWeight.w900)),Text(online?'Online • accepting rides within 7 km':'Offline • turn on to receive rides',style:const TextStyle(color:Colors.grey,fontSize:12))])),Switch(value:online,onChanged:onOnline)]))))),
-      Positioned(left:12,right:12,bottom:16,child:SafeArea(top:false,child:Column(children:[
-        Card(child:Padding(padding:const EdgeInsets.fromLTRB(16,15,16,14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          const Text('Where are you going?',style:TextStyle(fontSize:20,fontWeight:FontWeight.w900)),
-          const SizedBox(height:10),
-          Container(height:50,padding:const EdgeInsets.symmetric(horizontal:14),decoration:BoxDecoration(color:ivory,borderRadius:BorderRadius.circular(15)),child:const Row(children:[Icon(Icons.search),SizedBox(width:10),Text('Search pickup or destination',style:TextStyle(color:Colors.grey))])),
-          const SizedBox(height:12),
-          const Text('Recent destinations',style:TextStyle(fontWeight:FontWeight.w800)),
-          const SizedBox(height:7),
-          const Wrap(spacing:8,runSpacing:8,children:[Chip(label:Text('Prayagraj Civil Lines')),Chip(label:Text('Railway Junction')),Chip(label:Text('Sangam'))]),
-        ])),
-        const SizedBox(height:8),
-        if(activeRideId!=null)Card(child:ListTile(leading:const Icon(Icons.navigation,color:purple),title:const Text('Active ride',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('#'+activeRideId!),trailing:const Icon(Icons.chevron_right))),
-        if(!online)const SizedBox(height:2),
-        if(online)const Text('Nearby ride requests are shown in Requests.',style:TextStyle(color:Colors.black54,fontSize:12)),
-      ]))),
-    ]);
+class CarrierHome extends StatelessWidget {
+  final bool online;
+  final Position? position;
+  final String? activeRideId;
+  final Future<void> Function(bool) onOnline;
+
+  const CarrierHome({
+    super.key,
+    required this.online,
+    required this.position,
+    required this.activeRideId,
+    required this.onOnline,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final center = position == null
+        ? const LatLng(25.4358, 81.8463)
+        : LatLng(position!.latitude, position!.longitude);
+
+    final bottomItems = <Widget>[
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Where are you going?',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
+              ),
+              const SizedBox(height: 10),
+              Container(
+                height: 50,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: ivory,
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Row(
+                  children: [
+                    Icon(Icons.search),
+                    SizedBox(width: 10),
+                    Text(
+                      'Search pickup or destination',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              const Text(
+                'Recent destinations',
+                style: TextStyle(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 7),
+              const Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  Chip(label: Text('Prayagraj Civil Lines')),
+                  Chip(label: Text('Railway Junction')),
+                  Chip(label: Text('Sangam')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    ];
+
+    if (activeRideId != null) {
+      bottomItems.add(
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.navigation, color: purple),
+            title: const Text(
+              'Active ride',
+              style: TextStyle(fontWeight: FontWeight.w900),
+            ),
+            subtitle: Text('#' + activeRideId!),
+            trailing: const Icon(Icons.chevron_right),
+          ),
+        ),
+      );
+    }
+
+    if (online) {
+      bottomItems.add(
+        const Padding(
+          padding: EdgeInsets.only(top: 2),
+          child: Text(
+            'Nearby ride requests are shown in Requests.',
+            style: TextStyle(color: Colors.black54, fontSize: 12),
+          ),
+        ),
+      );
+
+      return Stack(
+        children: [
+          FlutterMap(
+            options: MapOptions(
+              initialCenter: center,
+              initialZoom: 14.5,
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                maxZoom: 19,
+                userAgentPackageName: 'com.allways.carrier',
+              ),
+              if (position != null)
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      point: center,
+                      width: 64,
+                      height: 64,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: purple,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 4),
+                          boxShadow: const [
+                            BoxShadow(color: Colors.black26, blurRadius: 8),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.two_wheeler,
+                          color: Colors.white,
+                          size: 30,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          Positioned(
+            top: 12,
+            left: 12,
+            right: 12,
+            child: SafeArea(
+              bottom: false,
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        backgroundColor: Color(0x1A5B1ACF),
+                        child: Icon(Icons.two_wheeler, color: purple),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'ALLways Carrier',
+                              style: TextStyle(fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              online
+                                  ? 'Online • accepting rides within 7 km'
+                                  : 'Offline • turn on to receive rides',
+                              style: const TextStyle(
+                                color: Colors.grey,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Switch(value: online, onChanged: onOnline),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 16,
+            child: SafeArea(
+              top: false,
+              child: Column(children: bottomItems),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Stack(
+      children: [
+        FlutterMap(
+          options: MapOptions(initialCenter: center, initialZoom: 14.5),
+          children: [
+            TileLayer(
+              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              maxZoom: 19,
+              userAgentPackageName: 'com.allways.carrier',
+            ),
+            if (position != null)
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: center,
+                    width: 64,
+                    height: 64,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: purple,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 4),
+                      ),
+                      child: const Icon(
+                        Icons.two_wheeler,
+                        color: Colors.white,
+                        size: 30,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        Positioned(
+          top: 12,
+          left: 12,
+          right: 12,
+          child: SafeArea(
+            bottom: false,
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    const CircleAvatar(
+                      backgroundColor: Color(0x1A5B1ACF),
+                      child: Icon(Icons.two_wheeler, color: purple),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'ALLways Carrier',
+                            style: TextStyle(fontWeight: FontWeight.w900),
+                          ),
+                          SizedBox(height: 2),
+                          Text(
+                            'Offline • turn on to receive rides',
+                            style: TextStyle(color: Colors.grey, fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Switch(value: online, onChanged: onOnline),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        Positioned(
+          left: 12,
+          right: 12,
+          bottom: 16,
+          child: SafeArea(
+            top: false,
+            child: Column(
+              children: bottomItems,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }
 
