@@ -1,5 +1,12 @@
 name: ALLways Carrier Android
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -7,64 +14,84 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
       - name: Bootstrap Android
         shell: bash
         run: |
           flutter create --platforms=android --org com.allways --project-name carrier .
           python3 - <<'PY'
           from pathlib import Path
-          p=Path("android/settings.gradle.kts")
-          s=p.read_text()
-          s=s.replace('plugins {', 'plugins {\n  id("com.google.gms.google-services") version "4.5.0" apply false', 1)
+          p = Path("android/settings.gradle.kts")
+          s = p.read_text()
+          if 'id("com.google.gms.google-services") version "4.5.0" apply false' not in s:
+              s = s.replace(
+                  "plugins {",
+                  'plugins {\n    id("com.google.gms.google-services") version "4.5.0" apply false',
+                  1,
+              )
           p.write_text(s)
-          p=Path("android/app/build.gradle.kts")
-          s=p.read_text()
-          prefix = '''import java.util.Properties
 
-val keystorePropertiesFile = rootProject.file("key.properties")
-val keystoreProperties = Properties()
-if (keystorePropertiesFile.exists()) {
-    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
-}
+          p = Path("android/app/build.gradle.kts")
+          s = p.read_text()
+          if 'id("com.google.gms.google-services")' not in s:
+              s = s.replace(
+                  "plugins {",
+                  'plugins {\n    id("com.google.gms.google-services")',
+                  1,
+              )
+          prefix = """import java.util.Properties
 
-'''
-          s=prefix+s
-          signing = '''    signingConfigs {
-        if (keystorePropertiesFile.exists()) {
-            create("release") {
-                keyAlias = keystoreProperties["keyAlias"] as String
-                keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile = file(keystoreProperties["storeFile"] as String)
-                storePassword = keystoreProperties["storePassword"] as String
-            }
-        }
-    }
+          val keystorePropertiesFile = rootProject.file("key.properties")
+          val keystoreProperties = Properties()
+          if (keystorePropertiesFile.exists()) {
+              keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+          }
 
-    buildTypes {
-        release {
-            signingConfig = if (keystorePropertiesFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
-        }
-    }
+          """
+          if "val keystorePropertiesFile = rootProject.file" not in s:
+              s = prefix + s
+          signing = """    signingConfigs {
+              if (keystorePropertiesFile.exists()) {
+                  create("release") {
+                      keyAlias = keystoreProperties["keyAlias"] as String
+                      keyPassword = keystoreProperties["keyPassword"] as String
+                      storeFile = file(keystoreProperties["storeFile"] as String)
+                      storePassword = keystoreProperties["storePassword"] as String
+                  }
+              }
+          }
 
-'''
-          s=s.replace("\nflutter {","\n"+signing+"flutter {")
-          s=s.replace('plugins {', 'plugins {\n  id("com.google.gms.google-services")', 1)
-          s=s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
-          s=s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
+          buildTypes {
+              release {
+                  signingConfig = if (keystorePropertiesFile.exists()) {
+                      signingConfigs.getByName("release")
+                  } else {
+                      signingConfigs.getByName("debug")
+                  }
+              }
+          }
+
+          """
+          if "signingConfigs {" not in s:
+              s = s.replace("\nflutter {", "\n" + signing + "flutter {", 1)
+          s = s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
+          s = s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
           if 'namespace = "com.allways.carrier"' not in s:
-            s=s.replace('android {', 'android {\n    namespace = "com.allways.carrier"', 1)
+              s = s.replace("android {", 'android {\n    namespace = "com.allways.carrier"', 1)
           if 'applicationId = "com.allways.carrier"' not in s:
-            s=s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
+              s = s.replace("applicationId = "", 'applicationId = "com.allways.carrier"\n    //', 1)
+              s = s.replace('applicationId = "com.allways.carrier"\n    //', 'applicationId = "com.allways.carrier"', 1)
           p.write_text(s)
-          PY
-          mkdir -p android/app/src/main
-          cat > android/app/src/main/AndroidManifest.xml <<'EOF'
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          manifest.parent.mkdir(parents=True, exist_ok=True)
+          manifest.write_text("""<manifest xmlns:android="http://schemas.android.com/apk/res/android">
             <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
             <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
             <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
@@ -79,7 +106,8 @@ if (keystorePropertiesFile.exists()) {
               <meta-data android:name="flutterEmbedding" android:value="2"/>
             </application>
           </manifest>
-          EOF
+          """)
+          PY
 
       - name: Configure release signing
         shell: bash
@@ -88,9 +116,13 @@ if (keystorePropertiesFile.exists()) {
           STORE_PASSWORD: ${{ secrets.ALLWAYS_KEYSTORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.ALLWAYS_KEY_PASSWORD }}
         run: |
+          test -n "$KEYSTORE_B64"
+          test -n "$STORE_PASSWORD"
+          test -n "$KEY_PASSWORD"
           printf '%s' "$KEYSTORE_B64" | base64 --decode > android/app/allways-release.jks
+          test -s android/app/allways-release.jks
           KEY_ALIAS="$(keytool -list -v -keystore android/app/allways-release.jks -storepass "$STORE_PASSWORD" | awk -F': ' '/^Alias name:/{print $2; exit}')"
-          test -n "$KEY_ALIAS"
+          test "$KEY_ALIAS" = "allways"
           cat > android/key.properties <<EOF
           storeFile=app/allways-release.jks
           storePassword=$STORE_PASSWORD
@@ -100,19 +132,24 @@ if (keystorePropertiesFile.exists()) {
 
       - name: Flutter pub get
         run: flutter pub get
+
       - name: Analyze
         run: flutter analyze
+
       - name: Test
         run: flutter test
+
       - name: Build release APK
         run: flutter build apk --release
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: allways-carrier-apk
+          name: allways-carrier-partner-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 14
+
       - name: Android runtime smoke test
         continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
