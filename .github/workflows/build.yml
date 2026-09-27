@@ -12,6 +12,23 @@ jobs:
         with:
           channel: stable
           cache: true
+      - name: Configure release signing
+        shell: bash
+        env:
+          KEYSTORE_B64: ${{ secrets.ALLWAYS_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ALLWAYS_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ALLWAYS_KEY_PASSWORD }}
+        run: |
+          printf '%s' "$KEYSTORE_B64" | base64 --decode > android/app/allways-release.jks
+          KEY_ALIAS="$(keytool -list -v -keystore android/app/allways-release.jks -storepass "$STORE_PASSWORD" | awk -F': ' '/^Alias name:/{print $2; exit}')"
+          test -n "$KEY_ALIAS"
+          cat > android/key.properties <<EOF
+          storeFile=app/allways-release.jks
+          storePassword=$STORE_PASSWORD
+          keyPassword=$KEY_PASSWORD
+          keyAlias=$KEY_ALIAS
+          EOF
+
       - name: Bootstrap Android
         shell: bash
         run: |
