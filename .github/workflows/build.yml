@@ -41,6 +41,35 @@ jobs:
           p.write_text(s)
           p=Path("android/app/build.gradle.kts")
           s=p.read_text()
+          prefix = '''import java.util.Properties
+
+val keystorePropertiesFile = rootProject.file("key.properties")
+val keystoreProperties = Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+}
+
+'''
+          s=prefix+s
+          signing = '''    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = keystoreProperties["keyAlias"] as String
+                keyPassword = keystoreProperties["keyPassword"] as String
+                storeFile = file(keystoreProperties["storeFile"] as String)
+                storePassword = keystoreProperties["storePassword"] as String
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = if (keystorePropertiesFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
+        }
+    }
+
+'''
+          s=s.replace("\nflutter {","\n"+signing+"flutter {")
           s=s.replace('plugins {', 'plugins {\n  id("com.google.gms.google-services")', 1)
           s=s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
           s=s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
