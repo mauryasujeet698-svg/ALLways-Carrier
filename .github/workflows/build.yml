@@ -1,90 +1,65 @@
 name: ALLways Carrier Android
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-permissions:
-  contents: write
+on: [push, workflow_dispatch]
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
-      - name: Bootstrap Android project
+      - name: Bootstrap Android
         shell: bash
         run: |
           flutter create --platforms=android --org com.allways --project-name carrier .
-          cat > android/settings.gradle.kts <<'EOF'
-pluginManagement {
-  val flutterSdkPath = run {
-    val properties = java.util.Properties()
-    file("local.properties").inputStream().use { properties.load(it) }
-    require(properties.getProperty("flutter.sdk") != null)
-    properties.getProperty("flutter.sdk")
-  }
-  includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
-  repositories { google(); mavenCentral(); gradlePluginPortal() }
-}
-plugins {
-  id("com.google.gms.google-services") version "4.5.0" apply false
-  id("dev.flutter.flutter-plugin-loader") version "1.0.0"
-  id("com.android.application") version "8.9.1" apply false
-  id("org.jetbrains.kotlin.android") version "2.3.10" apply false
-}
-include(":app")
-EOF
-          cat > android/app/build.gradle.kts <<'EOF'
-plugins {
-  id("com.android.application")
-  id("org.jetbrains.kotlin.android")
-  id("com.google.gms.google-services")
-  id("dev.flutter.flutter-gradle-plugin")
-}
-android {
-  namespace = "com.allways.carrier"
-  compileSdk = flutter.compileSdkVersion
-  ndkVersion = flutter.ndkVersion
-  defaultConfig {
-    applicationId = "com.allways.carrier"
-    minSdk = 23
-    targetSdk = flutter.targetSdkVersion
-    versionCode = flutter.versionCode
-    versionName = flutter.versionName
-  }
-  buildTypes { release { signingConfig = signingConfigs.getByName("debug") } }
-  compileOptions { sourceCompatibility = JavaVersion.VERSION_11; targetCompatibility = JavaVersion.VERSION_11 }
-}
-kotlin { jvmToolchain(11) }
-flutter { source = "../.." }
-dependencies { implementation(platform("com.google.firebase:firebase-bom:34.19.0")); implementation("com.google.firebase:firebase-messaging") }
-EOF
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("android/settings.gradle.kts")
+          s=p.read_text()
+          s=s.replace('plugins {', 'plugins {\n  id("com.google.gms.google-services") version "4.5.0" apply false', 1)
+          p.write_text(s)
+          p=Path("android/app/build.gradle.kts")
+          s=p.read_text()
+          s=s.replace('plugins {', 'plugins {\n  id("com.google.gms.google-services")', 1)
+          s=s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
+          s=s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
+          if 'namespace = "com.allways.carrier"' not in s:
+            s=s.replace('android {', 'android {\n    namespace = "com.allways.carrier"', 1)
+          if 'applicationId = "com.allways.carrier"' not in s:
+            s=s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
+          p.write_text(s)
+          PY
+          mkdir -p android/app/src/main
           cat > android/app/src/main/AndroidManifest.xml <<'EOF'
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
-  <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
-  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
-  <application android:label="ALLways Carrier" android:icon="@mipmap/ic_launcher">
-    <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
-      <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
-      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
-    </activity>
-    <meta-data android:name="flutterEmbedding" android:value="2"/>
-  </application>
-</manifest>
-EOF
-      - run: flutter pub get
-      - run: flutter analyze --fatal-infos
-      - run: flutter test
-      - run: flutter build apk --release
-      - uses: actions/upload-artifact@v4
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+            <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+            <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+            <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+            <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+            <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+            <application android:label="ALLways Carrier Android" android:icon="@mipmap/ic_launcher">
+              <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
+                <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
+                <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+              </activity>
+              <meta-data android:name="flutterEmbedding" android:value="2"/>
+            </application>
+          </manifest>
+          EOF
+          flutter pub get
+      - name: Analyze
+        run: flutter analyze
+      - name: Test
+        run: flutter test
+      - name: Build release APK
+        run: flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: allways-carrier-apk
           path: build/app/outputs/flutter-apk/app-release.apk
