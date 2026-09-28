@@ -57,7 +57,6 @@ jobs:
           if "val keystorePropertiesFile = rootProject.file" not in s:
               s = prefix + s
           signing = """    signingConfigs {
-          chr = chr
               if (keystorePropertiesFile.exists()) {
                   create("release") {
                       keyAlias = keystoreProperties["keyAlias"] as String
