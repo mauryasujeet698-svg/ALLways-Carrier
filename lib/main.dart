@@ -123,12 +123,12 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
             Expanded(child: Divider()),
           ]),
         ),
-        SizedBox(width:double.infinity,height:52,child:OutlinedButton.icon(onPressed:busy?null:signInWithGoogle,icon:const Icon(Icons.account_circle_outlined),label:const Text('Sign in with Google')))
+        SizedBox(width:double.infinity,height:52,child:OutlinedButton.icon(onPressed:busy?null:signInWithGoogle,icon:const Icon(Icons.account_circle_outlined),label:const Text('Sign in with Google'))),
           const SizedBox(height: 10),
           SizedBox(width: double.infinity, height: 48, child: TextButton(
             onPressed: busy ? null : signInWithGoogle,
             child: const Text('Create New Account'),
-          )),,
+          )),
       ])),
     ))))),
   );
