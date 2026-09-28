@@ -166,7 +166,7 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
     final response = await request.send();
     final body = await response.stream.bytesToString();
     if (response.statusCode < 200 || response.statusCode >= 300) throw Exception('Photo upload failed: $body');
-    final match = RegExp(r'"secure_url"\\s*:\\s*"([^"]+)"').firstMatch(body);
+    final match = RegExp(r'"secure_url"\s*:\s*"([^"]+)"').firstMatch(body);
     if (match == null) throw Exception('Cloudinary did not return a secure URL.');
     return match.group(1)!;
   }
