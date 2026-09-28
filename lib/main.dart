@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -348,7 +349,20 @@ class _CarrierShellState extends State<CarrierShell>{
   Future<void> _startLocation()async{
     if(!await _permission())return;
     try{
-      const settings=LocationSettings(accuracy:LocationAccuracy.high,distanceFilter:10);
+      final LocationSettings settings = Platform.isAndroid && online
+          ? AndroidSettings(
+              accuracy: LocationAccuracy.high,
+              distanceFilter: 10,
+              intervalDuration: const Duration(seconds: 10),
+              foregroundNotificationConfig: const ForegroundNotificationConfig(
+                notificationTitle: 'ALLways live ride tracking',
+                notificationText: 'ALLways is sharing your location while you are online or on an active ride.',
+                notificationChannelName: 'ALLways Live Ride Tracking',
+                enableWakeLock: true,
+                setOngoing: true,
+              ),
+            )
+          : const LocationSettings(accuracy: LocationAccuracy.high,distanceFilter:10);
       final first=await Geolocator.getCurrentPosition(locationSettings:settings);position=first;await _savePosition(first);
       await locationSub?.cancel();
       locationSub=Geolocator.getPositionStream(locationSettings:settings).listen((p){position=p;_savePosition(p);if(mounted)setState((){});});
@@ -400,9 +414,24 @@ class _CarrierShellState extends State<CarrierShell>{
   Future<void> _call(String phone)async{final p=phone.replaceAll(RegExp(r'[^0-9+]'),'');if(p.isNotEmpty)await launchUrl(Uri(scheme:'tel',path:p),mode:LaunchMode.externalApplication);}
   Future<void> _sos()async{await FirebaseFirestore.instance.collection('sosAlerts').add({'uid':widget.user.uid,'role':'carrier','createdAt':FieldValue.serverTimestamp(),'status':'open'});if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('SOS alert sent to ALLways operations.')));}
   Future<void> _vehicleDialog()async{
-    final c=TextEditingController(text:vehicle);
-    final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Vehicle type'),content:TextField(controller:c,decoration:const InputDecoration(hintText:'bike / auto / car')),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Save'))]));
-    if(ok==true){vehicle=c.text.trim().toLowerCase().replaceAll('two_wheeler','bike');await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':vehicle},SetOptions(merge:true));if(mounted)setState((){});}
+    final selected=await showDialog<String>(
+      context:context,
+      builder:(d)=>AlertDialog(
+        title:const Text('Vehicle type'),
+        content:StatefulBuilder(builder:(context,setDialogState)=>Column(
+          mainAxisSize:MainAxisSize.min,
+          children:[
+            RadioListTile<String>(value:'bike',groupValue:vehicle,title:const Text('Bike'),secondary:const Icon(Icons.two_wheeler),onChanged:(v){if(v!=null)Navigator.pop(d,v);}),
+            RadioListTile<String>(value:'auto',groupValue:vehicle,title:const Text('Auto'),secondary:const Icon(Icons.local_taxi_outlined),onChanged:(v){if(v!=null)Navigator.pop(d,v);}),
+            RadioListTile<String>(value:'car',groupValue:vehicle,title:const Text('Car'),secondary:const Icon(Icons.directions_car_outlined),onChanged:(v){if(v!=null)Navigator.pop(d,v);}),
+          ],
+        )),
+        actions:[TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancel'))],
+      ),
+    );
+    if(selected==null)return;
+    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':selected},SetOptions(merge:true));
+    if(mounted)setState(()=>vehicle=selected);
   }
   @override Widget build(BuildContext context){
     final pages=[
