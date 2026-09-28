@@ -859,6 +859,8 @@ class ActiveRide extends StatefulWidget {
 
 class _ActiveRideState extends State<ActiveRide> {
   List<LatLng> route = [];
+  List<Map<String,dynamic>> steps = [];
+  double? routeDistance,routeDuration;
   bool routeLoading = false;
 
   double number(dynamic value) {
@@ -879,7 +881,7 @@ class _ActiveRideState extends State<ActiveRide> {
         'https://router.project-osrm.org/route/v1/driving/'
         '${start.longitude},${start.latitude};'
         '${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson',
+        '?overview=full&geometries=geojson&steps=true',
       );
       final response = await http.get(url);
       if (response.statusCode != 200) return;
@@ -899,9 +901,10 @@ class _ActiveRideState extends State<ActiveRide> {
           )
           .toList();
 
-      if (mounted) {
-        setState(() => route = points);
-      }
+      final parsed=<Map<String,dynamic>>[];
+      final legs=body['routes']?[0]?['legs'];
+      if(legs is List)for(final leg in legs){final raw=leg['steps'];if(raw is! List)continue;for(final step in raw){final m=step['maneuver'] is Map?Map<String,dynamic>.from(step['maneuver']):<String,dynamic>{};parsed.add({'instruction':(m['type']??'continue').toString()=='arrive'?'You have arrived':(m['modifier']??'Continue straight').toString().replaceAll('_',' '),'road':(step['name']??'').toString(),'distance':step['distance'] is num?(step['distance'] as num).toDouble():0});}}
+      if (mounted) setState(() {route=points;steps=parsed;routeDistance=body['routes']?[0]?['distance'] is num?(body['routes'][0]['distance'] as num).toDouble():null;routeDuration=body['routes']?[0]?['duration'] is num?(body['routes'][0]['duration'] as num).toDouble():null;});
     } catch (_) {}
   }
 
@@ -937,9 +940,11 @@ class _ActiveRideState extends State<ActiveRide> {
           data['customerLng'] ?? data['pickupLongitude'],
         );
 
-        if (!routeLoading && route.isEmpty && pickup != null && destination != null) {
+        final rideStatus=status.toLowerCase();
+        final target=(rideStatus=='accepted'||rideStatus=='arrived')?pickup:destination;
+        if (!routeLoading && driver != null && target != null && route.isEmpty) {
           routeLoading = true;
-          loadRoute(pickup, destination);
+          loadRoute(driver, target);
         }
 
         final center =
@@ -1058,6 +1063,18 @@ class _ActiveRideState extends State<ActiveRide> {
                 ),
               ),
             ),
+            if (steps.isNotEmpty)
+              Positioned(
+                top: 84,left: 12,right: 12,
+                child: Card(child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[
+                  Container(width:48,height:48,alignment:Alignment.center,decoration:BoxDecoration(color:purple,borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.navigation,color:Colors.white,size:27)),
+                  const SizedBox(width:12),
+                  Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    Text((steps.first['instruction']??'Continue').toString(),style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900)),
+                    Text(((steps.first['distance'] as num)<1000?(steps.first['distance'] as num).round().toString()+' m':((steps.first['distance'] as num)/1000).toStringAsFixed(1)+' km')+((steps.first['road']??'').toString().isEmpty?'':' • '+steps.first['road'].toString()),style:const TextStyle(color:Colors.grey)),
+                  ])),
+                ]))),
+              ),
             Positioned(
               left: 12,
               right: 12,
