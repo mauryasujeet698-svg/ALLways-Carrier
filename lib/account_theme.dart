@@ -57,11 +57,19 @@ class AccountSettingsPage extends StatefulWidget {
 class _AccountSettingsPageState extends State<AccountSettingsPage>{
   bool deleting=false;
   Future<void> _deleteAccount() async {
+    final confirmation=TextEditingController();
     final ok=await showDialog<bool>(context:context,builder:(c)=>AlertDialog(
       title:const Text('Delete account?'),
-      content:const Text('This permanently deletes your account and its personal profile data. This action cannot be undone.'),
-      actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Delete'))],
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        Text(widget.role=='admin'?'This permanently deletes the Admin account and its personal profile data. Type DELETE to confirm.':'This permanently deletes your account and its personal profile data. This action cannot be undone.'),
+        if(widget.role=='admin')...[
+          const SizedBox(height:12),
+          TextField(controller:confirmation,decoration:const InputDecoration(labelText:'Type DELETE')),
+        ],
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(c,widget.role!='admin'||confirmation.text.trim()=='DELETE'),child:const Text('Delete'))],
     ))??false;
+    confirmation.dispose();
     if(!ok||deleting)return;
     setState(()=>deleting=true);
     try{
@@ -77,6 +85,7 @@ class _AccountSettingsPageState extends State<AccountSettingsPage>{
           final id=gu.authentication.idToken;
           if(id==null||id.isEmpty)throw Exception('Google re-authentication failed.');
           await u.reauthenticateWithCredential(GoogleAuthProvider.credential(idToken:id));
+          await FirebaseFirestore.instance.collection(widget.collection).doc(u.uid).delete().catchError((_){ });
           await u.delete();
         }else{
           final password=await _passwordDialog();
