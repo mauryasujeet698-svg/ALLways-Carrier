@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,6 +7,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -15,6 +17,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const purple=Color(0xFF5B1ACF);
+const cloudinaryCloudName='busdtvia';
+const cloudinaryUploadPreset='allways_preset';
 const ivory=Color(0xFFF8F6F0);
 
 @pragma('vm:entry-point')
@@ -147,20 +151,51 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
   final address = TextEditingController();
   final vehicleType = TextEditingController();
   final vehicleNumber = TextEditingController();
+  XFile? profilePhoto;
+  XFile? vehiclePhoto;
   bool busy = false;
   String? error;
+
+  Future<XFile?> _pickPhoto() => ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 60, maxWidth: 800);
+
+  Future<String> _uploadPhoto(XFile file, String folder) async {
+    final request = http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload'));
+    request.fields['upload_preset'] = cloudinaryUploadPreset;
+    request.fields['folder'] = folder;
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+    if (response.statusCode < 200 || response.statusCode >= 300) throw Exception('Photo upload failed: $body');
+    final match = RegExp(r'"secure_url"\\s*:\\s*"([^"]+)"').firstMatch(body);
+    if (match == null) throw Exception('Cloudinary did not return a secure URL.');
+    return match.group(1)!;
+  }
+
+  Future<void> _chooseProfilePhoto() async {
+    try { final f=await _pickPhoto(); if(f!=null && mounted)setState(()=>profilePhoto=f); }
+    catch(e){ if(mounted)setState(()=>error=e.toString()); }
+  }
+
+  Future<void> _chooseVehiclePhoto() async {
+    try { final f=await _pickPhoto(); if(f!=null && mounted)setState(()=>vehiclePhoto=f); }
+    catch(e){ if(mounted)setState(()=>error=e.toString()); }
+  }
 
   Future<void> submit() async {
     if (name.text.trim().isEmpty ||
         mobile.text.trim().isEmpty ||
         address.text.trim().isEmpty ||
         vehicleType.text.trim().isEmpty ||
-        vehicleNumber.text.trim().isEmpty) {
-      setState(() => error = 'Please complete all required fields.');
+        vehicleNumber.text.trim().isEmpty ||
+        profilePhoto == null ||
+        vehiclePhoto == null) {
+      setState(() => error = 'Please complete all required fields and photos.');
       return;
     }
     setState(() { busy = true; error = null; });
     try {
+      final profileUrl = await _uploadPhoto(profilePhoto!, 'allways/profiles/carriers');
+      final vehicleUrl = await _uploadPhoto(vehiclePhoto!, 'allways/vehicles/carriers');
       final ref = FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid);
       await ref.set({
         'uid': widget.user.uid,
@@ -173,7 +208,8 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
         'address': address.text.trim(),
         'vehicleType': vehicleType.text.trim().toLowerCase(),
         'vehicleNumber': vehicleNumber.text.trim().toUpperCase(),
-        'profilePhotoUrl': widget.user.photoURL,
+        'profilePhotoUrl': profileUrl,
+        'vehiclePhotoUrl': vehicleUrl,
         'approvalStatus': 'pending',
         'status': 'pending',
         'availableForDeliveries': false,
@@ -182,6 +218,7 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'submittedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => PendingApprovalPage(user: widget.user, rejected: false)));
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
@@ -216,6 +253,24 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
           field(address, 'Address'),
           field(vehicleType, 'Vehicle type'),
           field(vehicleNumber, 'Vehicle number'),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _chooseProfilePhoto,
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: Text(profilePhoto == null ? 'Upload profile photo' : 'Profile photo selected'),
+          ),
+          if (profilePhoto != null) Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(profilePhoto!.path), height: 140, width: double.infinity, fit: BoxFit.cover)),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _chooseVehiclePhoto,
+            icon: const Icon(Icons.directions_car_outlined),
+            label: Text(vehiclePhoto == null ? 'Upload vehicle photo' : 'Vehicle photo selected'),
+          ),
+          if (vehiclePhoto != null) Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(vehiclePhoto!.path), height: 140, width: double.infinity, fit: BoxFit.cover)),
+          ),
           if (error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -275,7 +330,7 @@ class PendingApprovalPage extends StatelessWidget {
                   Text(
                     rejected
                         ? (reason.isEmpty ? 'Please contact ALLways support for the next step.' : 'Reason: $reason')
-                        : 'Your registration has been submitted. You can go online and accept work after Admin approval.',
+                        : 'Request submitted. Waiting for approval.',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
