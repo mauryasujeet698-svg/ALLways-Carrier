@@ -86,8 +86,6 @@ jobs:
               s = s.replace("android {", 'android {\n    namespace = "com.allways.carrier"', 1)
           s = s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
           s = s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
-          if 'namespace = "com.allways.carrier"' not in s:
-              s = s.replace("android {", 'android {\\n    namespace = "com.allways.carrier"', 1)
           if 'applicationId = "com.allways.carrier"' not in s:
               s = s.replace('applicationId = ""', 'applicationId = "com.allways.carrier"', 1)
           p.write_text(s)
