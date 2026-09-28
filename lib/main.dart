@@ -451,6 +451,12 @@ class _CarrierShellState extends State<CarrierShell>{
       if(mounted){setState(()=>activeRideId=doc.id);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
+  Future<void> _start(DocumentReference ref)async{
+    try{
+      await ref.update({'status':'started','startedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride started.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not start ride: '+e.toString())));}
+  }
   Future<void> _complete(DocumentReference ref)async{
     await ref.update({'status':'completed','completedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
     await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'online','availableForRides':true,'activeRideId':null,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
@@ -467,7 +473,7 @@ class _CarrierShellState extends State<CarrierShell>{
     final pages=[
       CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,onAccept:_accept,onReject:_reject),
-      ActiveRide(rideId:activeRideId,position:position,onCall:_call,onComplete:_complete),
+      ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_start,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
     ];
@@ -832,6 +838,7 @@ class ActiveRide extends StatefulWidget {
   final String? rideId;
   final Position? position;
   final Future<void> Function(String) onCall;
+  final Future<void> Function(DocumentReference) onStart;
   final Future<void> Function(DocumentReference) onComplete;
 
   const ActiveRide({
@@ -839,6 +846,7 @@ class ActiveRide extends StatefulWidget {
     required this.rideId,
     required this.position,
     required this.onCall,
+    required this.onStart,
     required this.onComplete,
   });
 
@@ -1075,12 +1083,22 @@ class _ActiveRideState extends State<ActiveRide> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: () =>
-                                widget.onComplete(snapshot.data!.reference),
+                            onPressed: () {
+                              final s = status.toLowerCase();
+                              if (s == 'accepted' || s == 'arrived') {
+                                widget.onStart(snapshot.data!.reference);
+                              } else {
+                                widget.onComplete(snapshot.data!.reference);
+                              }
+                            },
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.green,
                             ),
-                            child: const Text('Complete ride'),
+                            child: Text(
+                              (status.toLowerCase() == 'started' || status.toLowerCase() == 'in_progress')
+                                  ? 'Complete ride'
+                                  : 'Start ride',
+                            ),
                           ),
                         ),
                       ],
