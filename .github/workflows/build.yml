@@ -67,19 +67,11 @@ jobs:
               }
           }
 
-          buildTypes {
-              release {
-                  signingConfig = if (keystorePropertiesFile.exists()) {
-                      signingConfigs.getByName("release")
-                  } else {
-                      signingConfigs.getByName("debug")
-                  }
-              }
-          }
-
           """
           if "signingConfigs {" not in s:
-              s = s.replace("\nflutter {", "\n" + signing + "flutter {", 1)
+              s = s.replace("android {", "android {\\n" + signing, 1)
+          s = s.replace('signingConfig = signingConfigs.getByName("debug")',
+              'signingConfig = if (keystorePropertiesFile.exists()) { signingConfigs.getByName("release") } else { signingConfigs.getByName("debug") }')
           s = s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
           s = s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
           if 'namespace = "com.allways.carrier"' not in s:
