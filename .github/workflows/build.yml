@@ -57,6 +57,7 @@ jobs:
           if "val keystorePropertiesFile = rootProject.file" not in s:
               s = prefix + s
           signing = """    signingConfigs {
+          chr = chr
               if (keystorePropertiesFile.exists()) {
                   create("release") {
                       keyAlias = keystoreProperties["keyAlias"] as String
@@ -69,7 +70,7 @@ jobs:
 
           """
           if "signingConfigs {" not in s:
-              s = s.replace("android {", "android {\\n" + signing, 1)
+              s = s.replace("android {", "android {" + chr(10) + signing, 1)
           s = s.replace('signingConfig = signingConfigs.getByName("debug")',
               'signingConfig = if (keystorePropertiesFile.exists()) { signingConfigs.getByName("release") } else { signingConfigs.getByName("debug") }')
           s = s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
