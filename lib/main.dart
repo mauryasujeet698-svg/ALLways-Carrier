@@ -375,8 +375,13 @@ class _CarrierShellState extends State<CarrierShell>{
       if(s.authorizationStatus==AuthorizationStatus.denied)return;
       await FirebaseMessaging.instance.subscribeToTopic('all_users');
       await FirebaseMessaging.instance.subscribeToTopic('carriers');
-      final t=await FirebaseMessaging.instance.getToken();
-      if(t!=null&&t.isNotEmpty)await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set({'uid':widget.user.uid,'token':t,'role':'carrier','updatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+      await p.setBool('notifications_enabled', true);
+      Future<void> saveToken(String? t) async {
+        if(t==null||t.isEmpty)return;
+        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set({'uid':widget.user.uid,'token':t,'role':'carrier','updatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+      }
+      await saveToken(await FirebaseMessaging.instance.getToken());
+      FirebaseMessaging.instance.onTokenRefresh.listen(saveToken);
     }catch(_){}
   }
   Future<bool> _permission()async{
