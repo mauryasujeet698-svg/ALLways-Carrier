@@ -123,9 +123,173 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
             Expanded(child: Divider()),
           ]),
         ),
-        SizedBox(width:double.infinity,height:52,child:OutlinedButton.icon(onPressed:busy?null:signInWithGoogle,icon:const Icon(Icons.account_circle_outlined),label:const Text('Sign in with Google'))),
+        SizedBox(width:double.infinity,height:52,child:OutlinedButton.icon(onPressed:busy?null:signInWithGoogle,icon:const Icon(Icons.account_circle_outlined),label:const Text('Sign in with Google')))
+          const SizedBox(height: 10),
+          SizedBox(width: double.infinity, height: 48, child: TextButton(
+            onPressed: busy ? null : signInWithGoogle,
+            child: const Text('Create New Account'),
+          )),,
       ])),
     ))))),
+  );
+}
+
+
+class PartnerRegistrationPage extends StatefulWidget {
+  final User user;
+  const PartnerRegistrationPage({super.key, required this.user});
+  @override State<PartnerRegistrationPage> createState() => _PartnerRegistrationPageState();
+}
+
+class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
+  final name = TextEditingController();
+  final mobile = TextEditingController();
+  final address = TextEditingController();
+  final vehicleType = TextEditingController();
+  final vehicleNumber = TextEditingController();
+  bool busy = false;
+  String? error;
+
+  Future<void> submit() async {
+    if (name.text.trim().isEmpty ||
+        mobile.text.trim().isEmpty ||
+        address.text.trim().isEmpty ||
+        vehicleType.text.trim().isEmpty ||
+        vehicleNumber.text.trim().isEmpty) {
+      setState(() => error = 'Please complete all required fields.');
+      return;
+    }
+    setState(() { busy = true; error = null; });
+    try {
+      final ref = FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid);
+      await ref.set({
+        'uid': widget.user.uid,
+        'role': 'carrier',
+        'name': name.text.trim(),
+        'displayName': name.text.trim(),
+        'email': widget.user.email,
+        'phone': mobile.text.trim(),
+        'mobileNumber': mobile.text.trim(),
+        'address': address.text.trim(),
+        'vehicleType': vehicleType.text.trim().toLowerCase(),
+        'vehicleNumber': vehicleNumber.text.trim().toUpperCase(),
+        'profilePhotoUrl': widget.user.photoURL,
+        'approvalStatus': 'pending',
+        'status': 'pending',
+        'availableForDeliveries': false,
+        'availableForRides': false,
+        'isOnline': false,
+        'createdAt': FieldValue.serverTimestamp(),
+        'submittedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    } catch (e) {
+      if (mounted) setState(() => error = e.toString());
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Widget field(TextEditingController controller, String label, {TextInputType? keyboard}) =>
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: TextField(
+          controller: controller,
+          keyboardType: keyboard,
+          decoration: InputDecoration(labelText: label, border: const OutlineInputBorder()),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    appBar: AppBar(title: const Text('Create Partner Account')),
+    body: SafeArea(
+      child: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          const Text('Partner registration',
+              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900)),
+          const SizedBox(height: 6),
+          const Text('Complete your profile. Admin approval is required before you can go online.'),
+          const SizedBox(height: 20),
+          field(name, 'Full name'),
+          field(mobile, 'Mobile number', keyboard: TextInputType.phone),
+          field(address, 'Address'),
+          field(vehicleType, 'Vehicle type'),
+          field(vehicleNumber, 'Vehicle number'),
+          if (error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(error!, style: const TextStyle(color: Colors.red)),
+            ),
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              onPressed: busy ? null : submit,
+              style: FilledButton.styleFrom(backgroundColor: purple),
+              child: busy
+                  ? const CircularProgressIndicator(color: Colors.white)
+                  : const Text('Submit for approval'),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class PendingApprovalPage extends StatelessWidget {
+  final User user;
+  final bool rejected;
+  final String reason;
+  const PendingApprovalPage({
+    super.key,
+    required this.user,
+    required this.rejected,
+    this.reason = '',
+  });
+
+  @override
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    rejected ? Icons.cancel_outlined : Icons.hourglass_top,
+                    size: 58,
+                    color: rejected ? Colors.red : purple,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    rejected ? 'Registration rejected' : 'Approval pending',
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    rejected
+                        ? (reason.isEmpty ? 'Please contact ALLways support for the next step.' : 'Reason: $reason')
+                        : 'Your registration has been submitted. You can go online and accept work after Admin approval.',
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  OutlinedButton(
+                    onPressed: () => FirebaseAuth.instance.signOut(),
+                    child: const Text('Sign out'),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
