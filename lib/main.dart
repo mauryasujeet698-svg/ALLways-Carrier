@@ -940,7 +940,7 @@ class _ActiveRideState extends State<ActiveRide> {
           data['customerLng'] ?? data['pickupLongitude'],
         );
 
-        final rideStatus=status.toLowerCase();
+        final rideStatus=(data['status']??'accepted').toString().toLowerCase();
         final target=(rideStatus=='accepted'||rideStatus=='arrived')?pickup:destination;
         if (!routeLoading && driver != null && target != null && route.isEmpty) {
           routeLoading = true;
