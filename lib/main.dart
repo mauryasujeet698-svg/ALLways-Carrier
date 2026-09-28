@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -6,15 +7,19 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'account_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const purple=Color(0xFF5B1ACF);
+const cloudinaryCloudName='busdtvia';
+const cloudinaryUploadPreset='allways_preset';
 const ivory=Color(0xFFF8F6F0);
 
 @pragma('vm:entry-point')
@@ -24,13 +29,16 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize();
+  await appThemeController.load();
   FirebaseMessaging.onBackgroundMessage(_background);
   runApp(const AllwaysCarrierApp());
 }
 
 class AllwaysCarrierApp extends StatelessWidget {
   const AllwaysCarrierApp({super.key});
-  @override Widget build(BuildContext context)=>MaterialApp(
+  @override Widget build(BuildContext context)=>ValueListenableBuilder<ThemeMode>(
+    valueListenable:appThemeController,
+    builder:(context,mode,_)=>MaterialApp(
     debugShowCheckedModeBanner:false,
     title:'ALLways Carrier',
     theme:ThemeData(
@@ -40,7 +48,10 @@ class AllwaysCarrierApp extends StatelessWidget {
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
     ),
+    themeMode:mode,
+    darkTheme:ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:purple,brightness:Brightness.dark),textTheme:GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme)),
     home:const AuthGate(),
+  ),
   );
 }
 
@@ -54,6 +65,7 @@ class AuthGate extends StatelessWidget{
    final p=a.data!.data()??{};final approval=(p['approvalStatus']??'').toString().toLowerCase();
    if(approval=='pending')return PendingApprovalPage(user:s.data!,rejected:false);
    if(approval=='rejected')return PendingApprovalPage(user:s.data!,rejected:true,reason:(p['rejectionReason']??'').toString());
+   if(approval=='suspended')return PendingApprovalPage(user:s.data!,rejected:true,reason:(p['suspensionReason']??'Account suspended by Admin.').toString());
    return CarrierShell(user:s.data!);
   });
  });
@@ -135,6 +147,13 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
 }
 
 
+String normalizeRideVehicle(String value) {
+  final v = value.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+  if (v == 'bike' || v == 'motorcycle' || v == 'scooter' || v == 'two_wheeler' || v == 'two_wheeler_vehicle') return 'bike';
+  if (v == 'auto' || v == 'auto_rickshaw' || v == 'e_rickshaw' || v == 'erickshaw') return 'auto';
+  return v;
+}
+
 class PartnerRegistrationPage extends StatefulWidget {
   final User user;
   const PartnerRegistrationPage({super.key, required this.user});
@@ -146,21 +165,55 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
   final mobile = TextEditingController();
   final address = TextEditingController();
   final vehicleType = TextEditingController();
+  static const vehicleTypeOptions = <String>[    'bike',
+    'auto',
+  ];
   final vehicleNumber = TextEditingController();
+  XFile? profilePhoto;
+  XFile? vehiclePhoto;
   bool busy = false;
   String? error;
+
+  Future<XFile?> _pickPhoto() => ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 60, maxWidth: 800);
+
+  Future<String> _uploadPhoto(XFile file, String folder) async {
+    final request = http.MultipartRequest('POST', Uri.parse('https://api.cloudinary.com/v1_1/$cloudinaryCloudName/image/upload'));
+    request.fields['upload_preset'] = cloudinaryUploadPreset;
+    request.fields['folder'] = folder;
+    request.files.add(await http.MultipartFile.fromPath('file', file.path));
+    final response = await request.send();
+    final body = await response.stream.bytesToString();
+    if (response.statusCode < 200 || response.statusCode >= 300) throw Exception('Photo upload failed: $body');
+    final match = RegExp(r'"secure_url"\s*:\s*"([^"]+)"').firstMatch(body);
+    if (match == null) throw Exception('Cloudinary did not return a secure URL.');
+    return match.group(1)!;
+  }
+
+  Future<void> _chooseProfilePhoto() async {
+    try { final f=await _pickPhoto(); if(f!=null && mounted)setState(()=>profilePhoto=f); }
+    catch(e){ if(mounted)setState(()=>error=e.toString()); }
+  }
+
+  Future<void> _chooseVehiclePhoto() async {
+    try { final f=await _pickPhoto(); if(f!=null && mounted)setState(()=>vehiclePhoto=f); }
+    catch(e){ if(mounted)setState(()=>error=e.toString()); }
+  }
 
   Future<void> submit() async {
     if (name.text.trim().isEmpty ||
         mobile.text.trim().isEmpty ||
         address.text.trim().isEmpty ||
         vehicleType.text.trim().isEmpty ||
-        vehicleNumber.text.trim().isEmpty) {
-      setState(() => error = 'Please complete all required fields.');
+        vehicleNumber.text.trim().isEmpty ||
+        profilePhoto == null ||
+        vehiclePhoto == null) {
+      setState(() => error = 'Please complete all required fields and photos.');
       return;
     }
     setState(() { busy = true; error = null; });
     try {
+      final profileUrl = await _uploadPhoto(profilePhoto!, 'allways/profiles/carriers');
+      final vehicleUrl = await _uploadPhoto(vehiclePhoto!, 'allways/vehicles/carriers');
       final ref = FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid);
       await ref.set({
         'uid': widget.user.uid,
@@ -171,9 +224,10 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
         'phone': mobile.text.trim(),
         'mobileNumber': mobile.text.trim(),
         'address': address.text.trim(),
-        'vehicleType': vehicleType.text.trim().toLowerCase(),
+        'vehicleType': normalizeRideVehicle(vehicleType.text),
         'vehicleNumber': vehicleNumber.text.trim().toUpperCase(),
-        'profilePhotoUrl': widget.user.photoURL,
+        'profilePhotoUrl': profileUrl,
+        'vehiclePhotoUrl': vehicleUrl,
         'approvalStatus': 'pending',
         'status': 'pending',
         'availableForDeliveries': false,
@@ -182,10 +236,22 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
         'createdAt': FieldValue.serverTimestamp(),
         'submittedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
+      if (mounted) Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => PendingApprovalPage(user: widget.user, rejected: false)));
     } catch (e) {
       if (mounted) setState(() => error = e.toString());
     } finally {
       if (mounted) setState(() => busy = false);
+    }
+  }
+
+  String _vehicleLabel(String type) {
+    switch (type) {
+      case 'bike': return 'Bike / Motorcycle';
+      case 'scooter': return 'Scooter';
+      case 'cycle': return 'Cycle';
+      case 'auto': return 'Auto Rickshaw';
+      case 'e_rickshaw': return 'E-Rickshaw';
+      default: return type;
     }
   }
 
@@ -214,8 +280,43 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
           field(name, 'Full name'),
           field(mobile, 'Mobile number', keyboard: TextInputType.phone),
           field(address, 'Address'),
-          field(vehicleType, 'Vehicle type'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DropdownButtonFormField<String>(
+              value: vehicleType.text.isEmpty ? null : vehicleType.text,
+              decoration: const InputDecoration(
+                labelText: 'Vehicle type',
+                border: OutlineInputBorder(),
+              ),
+              hint: const Text('Select vehicle type'),
+              items: vehicleTypeOptions.map((type) => DropdownMenuItem<String>(
+                value: type,
+                child: Text(_vehicleLabel(type)),
+              )).toList(),
+              onChanged: busy ? null : (value) {
+                if (value != null) setState(() => vehicleType.text = value);
+              },
+            ),
+          ),
           field(vehicleNumber, 'Vehicle number'),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _chooseProfilePhoto,
+            icon: const Icon(Icons.photo_camera_outlined),
+            label: Text(profilePhoto == null ? 'Upload profile photo' : 'Profile photo selected'),
+          ),
+          if (profilePhoto != null) Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(profilePhoto!.path), height: 140, width: double.infinity, fit: BoxFit.cover)),
+          ),
+          OutlinedButton.icon(
+            onPressed: busy ? null : _chooseVehiclePhoto,
+            icon: const Icon(Icons.directions_car_outlined),
+            label: Text(vehiclePhoto == null ? 'Upload vehicle photo' : 'Vehicle photo selected'),
+          ),
+          if (vehiclePhoto != null) Padding(
+            padding: const EdgeInsets.only(top: 8, bottom: 8),
+            child: ClipRRect(borderRadius: BorderRadius.circular(12), child: Image.file(File(vehiclePhoto!.path), height: 140, width: double.infinity, fit: BoxFit.cover)),
+          ),
           if (error != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 12),
@@ -275,7 +376,7 @@ class PendingApprovalPage extends StatelessWidget {
                   Text(
                     rejected
                         ? (reason.isEmpty ? 'Please contact ALLways support for the next step.' : 'Reason: $reason')
-                        : 'Your registration has been submitted. You can go online and accept work after Admin approval.',
+                        : 'Request submitted. Waiting for approval.',
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 20),
@@ -308,7 +409,7 @@ class _CarrierShellState extends State<CarrierShell>{
       final x=r.data()??{};
       online=(x['status']??'offline').toString().toLowerCase()=='online';
       activeRideId=(x['activeRideId']??'').toString();if(activeRideId!.isEmpty)activeRideId=null;
-      vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
+      vehicle=normalizeRideVehicle((x['vehicleType']??'bike').toString());
       await _startLocation();
     }catch(_){}
     if(mounted)setState((){});
@@ -320,8 +421,13 @@ class _CarrierShellState extends State<CarrierShell>{
       if(s.authorizationStatus==AuthorizationStatus.denied)return;
       await FirebaseMessaging.instance.subscribeToTopic('all_users');
       await FirebaseMessaging.instance.subscribeToTopic('carriers');
-      final t=await FirebaseMessaging.instance.getToken();
-      if(t!=null&&t.isNotEmpty)await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set({'uid':widget.user.uid,'token':t,'role':'carrier','updatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+      await p.setBool('notifications_enabled', true);
+      Future<void> saveToken(String? t) async {
+        if(t==null||t.isEmpty)return;
+        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set({'uid':widget.user.uid,'token':t,'role':'carrier','updatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+      }
+      await saveToken(await FirebaseMessaging.instance.getToken());
+      FirebaseMessaging.instance.onTokenRefresh.listen(saveToken);
     }catch(_){}
   }
   Future<bool> _permission()async{
@@ -368,13 +474,19 @@ class _CarrierShellState extends State<CarrierShell>{
         final latest=await tx.get(doc.reference);final x=latest.data()??{};
         if((x['status']??'').toString().toLowerCase()!='searching')throw Exception('Ride already accepted.');
         final p=await tx.get(FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid));final profile=p.data()??{};
-        final requested=(x['rideType']??'bike').toString().toLowerCase();final mine=(profile['vehicleType']??vehicle).toString().toLowerCase();final normalized=mine=='two_wheeler'?'bike':mine;
+        final requested=normalizeRideVehicle((x['rideType']??'bike').toString());final normalized=normalizeRideVehicle((profile['vehicleType']??vehicle).toString());
         if(requested!=normalized)throw Exception('This ride is for a different vehicle type.');
         tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Carrier','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
         tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
       });
       if(mounted){setState(()=>activeRideId=doc.id);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+  }
+  Future<void> _start(DocumentReference ref)async{
+    try{
+      await ref.update({'status':'started','startedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride started.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not start ride: '+e.toString())));}
   }
   Future<void> _complete(DocumentReference ref)async{
     await ref.update({'status':'completed','completedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
@@ -386,13 +498,13 @@ class _CarrierShellState extends State<CarrierShell>{
   Future<void> _vehicleDialog()async{
     final c=TextEditingController(text:vehicle);
     final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Vehicle type'),content:TextField(controller:c,decoration:const InputDecoration(hintText:'bike / auto / car')),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Save'))]));
-    if(ok==true){vehicle=c.text.trim().toLowerCase().replaceAll('two_wheeler','bike');await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':vehicle},SetOptions(merge:true));if(mounted)setState((){});}
+    if(ok==true){vehicle=normalizeRideVehicle(c.text);await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':vehicle},SetOptions(merge:true));if(mounted)setState((){});}
   }
   @override Widget build(BuildContext context){
     final pages=[
-      CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
+      CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onActiveRide:()=>setState(()=>tab=2)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,onAccept:_accept,onReject:_reject),
-      ActiveRide(rideId:activeRideId,position:position,onCall:_call,onComplete:_complete),
+      ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_start,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
     ];
@@ -417,6 +529,7 @@ class CarrierHome extends StatelessWidget {
   final Position? position;
   final String? activeRideId;
   final Future<void> Function(bool) onOnline;
+  final VoidCallback onActiveRide;
 
   const CarrierHome({
     super.key,
@@ -424,6 +537,7 @@ class CarrierHome extends StatelessWidget {
     required this.position,
     required this.activeRideId,
     required this.onOnline,
+    required this.onActiveRide,
   });
 
   @override
@@ -494,6 +608,7 @@ class CarrierHome extends StatelessWidget {
             ),
             subtitle: Text('#' + activeRideId!),
             trailing: const Icon(Icons.chevron_right),
+            onTap: onActiveRide,
           ),
         ),
       );
@@ -757,6 +872,7 @@ class ActiveRide extends StatefulWidget {
   final String? rideId;
   final Position? position;
   final Future<void> Function(String) onCall;
+  final Future<void> Function(DocumentReference) onStart;
   final Future<void> Function(DocumentReference) onComplete;
 
   const ActiveRide({
@@ -764,6 +880,7 @@ class ActiveRide extends StatefulWidget {
     required this.rideId,
     required this.position,
     required this.onCall,
+    required this.onStart,
     required this.onComplete,
   });
 
@@ -773,6 +890,8 @@ class ActiveRide extends StatefulWidget {
 
 class _ActiveRideState extends State<ActiveRide> {
   List<LatLng> route = [];
+  List<Map<String,dynamic>> steps = [];
+  double? routeDistance,routeDuration;
   bool routeLoading = false;
 
   double number(dynamic value) {
@@ -793,7 +912,7 @@ class _ActiveRideState extends State<ActiveRide> {
         'https://router.project-osrm.org/route/v1/driving/'
         '${start.longitude},${start.latitude};'
         '${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson',
+        '?overview=full&geometries=geojson&steps=true',
       );
       final response = await http.get(url);
       if (response.statusCode != 200) return;
@@ -813,9 +932,10 @@ class _ActiveRideState extends State<ActiveRide> {
           )
           .toList();
 
-      if (mounted) {
-        setState(() => route = points);
-      }
+      final parsed=<Map<String,dynamic>>[];
+      final legs=body['routes']?[0]?['legs'];
+      if(legs is List)for(final leg in legs){final raw=leg['steps'];if(raw is! List)continue;for(final step in raw){final m=step['maneuver'] is Map?Map<String,dynamic>.from(step['maneuver']):<String,dynamic>{};parsed.add({'instruction':(m['type']??'continue').toString()=='arrive'?'You have arrived':(m['modifier']??'Continue straight').toString().replaceAll('_',' '),'road':(step['name']??'').toString(),'distance':step['distance'] is num?(step['distance'] as num).toDouble():0});}}
+      if (mounted) setState(() {route=points;steps=parsed;routeDistance=body['routes']?[0]?['distance'] is num?(body['routes'][0]['distance'] as num).toDouble():null;routeDuration=body['routes']?[0]?['duration'] is num?(body['routes'][0]['duration'] as num).toDouble():null;});
     } catch (_) {}
   }
 
@@ -851,9 +971,11 @@ class _ActiveRideState extends State<ActiveRide> {
           data['customerLng'] ?? data['pickupLongitude'],
         );
 
-        if (!routeLoading && route.isEmpty && pickup != null && destination != null) {
+        final rideStatus=(data['status']??'accepted').toString().toLowerCase();
+        final target=(rideStatus=='accepted'||rideStatus=='arrived')?pickup:destination;
+        if (!routeLoading && driver != null && target != null && route.isEmpty) {
           routeLoading = true;
-          loadRoute(pickup, destination);
+          loadRoute(driver, target);
         }
 
         final center =
@@ -972,6 +1094,18 @@ class _ActiveRideState extends State<ActiveRide> {
                 ),
               ),
             ),
+            if (steps.isNotEmpty)
+              Positioned(
+                top: 84,left: 12,right: 12,
+                child: Card(child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[
+                  Container(width:48,height:48,alignment:Alignment.center,decoration:BoxDecoration(color:purple,borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.navigation,color:Colors.white,size:27)),
+                  const SizedBox(width:12),
+                  Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                    Text((steps.first['instruction']??'Continue').toString(),style:const TextStyle(fontSize:17,fontWeight:FontWeight.w900)),
+                    Text(((steps.first['distance'] as num)<1000?(steps.first['distance'] as num).round().toString()+' m':((steps.first['distance'] as num)/1000).toStringAsFixed(1)+' km')+((steps.first['road']??'').toString().isEmpty?'':' • '+steps.first['road'].toString()),style:const TextStyle(color:Colors.grey)),
+                  ])),
+                ]))),
+              ),
             Positioned(
               left: 12,
               right: 12,
@@ -1000,12 +1134,22 @@ class _ActiveRideState extends State<ActiveRide> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: () =>
-                                widget.onComplete(snapshot.data!.reference),
+                            onPressed: () {
+                              final s = status.toLowerCase();
+                              if (s == 'accepted' || s == 'arrived') {
+                                widget.onStart(snapshot.data!.reference);
+                              } else {
+                                widget.onComplete(snapshot.data!.reference);
+                              }
+                            },
                             style: FilledButton.styleFrom(
                               backgroundColor: Colors.green,
                             ),
-                            child: const Text('Complete ride'),
+                            child: Text(
+                              (status.toLowerCase() == 'started' || status.toLowerCase() == 'in_progress')
+                                  ? 'Complete ride'
+                                  : 'Start ride',
+                            ),
                           ),
                         ),
                       ],
@@ -1039,9 +1183,11 @@ class CarrierProfile extends StatelessWidget{
     const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:purple),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
-    const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
+    Card(child:ListTile(leading:const Icon(Icons.description_outlined),title:const Text('Verification'),subtitle:const Text('Keep identity and vehicle documents current.'),onTap:()=>showDialog(context:c,builder:(_)=>AlertDialog(title:const Text('Verification'),content:const Text('Your profile and vehicle verification details are stored with your ALLways rider account.'),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('Close'))])))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
-    const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Contact ALLways operations for ride issues.'))),
+    Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),onTap:()=>showDialog(context:c,builder:(_)=>AlertDialog(title:const Text('Help & Support'),content:const Text('For rider issues, contact ALLways operations with the ride ID and a short description.'),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('Close'))])))),
+    Card(child:ListTile(leading:const Icon(Icons.palette_outlined,color:purple),title:const Text('Change Theme'),subtitle:const Text('Light, dark or system default'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>ThemeSettingsPage(accent:purple))))),
+    Card(child:ListTile(leading:const Icon(Icons.manage_accounts,color:purple),title:const Text('Account Settings'),subtitle:const Text('Login, sign out and account deletion'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>AccountSettingsPage(user:user,collection:'ridePartners',accent:purple,role:'carrier'))))),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
 }
