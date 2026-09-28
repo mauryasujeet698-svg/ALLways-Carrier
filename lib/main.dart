@@ -165,6 +165,9 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
   final mobile = TextEditingController();
   final address = TextEditingController();
   final vehicleType = TextEditingController();
+  static const vehicleTypeOptions = <String>[    'bike',
+    'auto',
+  ];
   final vehicleNumber = TextEditingController();
   XFile? profilePhoto;
   XFile? vehiclePhoto;
@@ -241,6 +244,17 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
     }
   }
 
+  String _vehicleLabel(String type) {
+    switch (type) {
+      case 'bike': return 'Bike / Motorcycle';
+      case 'scooter': return 'Scooter';
+      case 'cycle': return 'Cycle';
+      case 'auto': return 'Auto Rickshaw';
+      case 'e_rickshaw': return 'E-Rickshaw';
+      default: return type;
+    }
+  }
+
   Widget field(TextEditingController controller, String label, {TextInputType? keyboard}) =>
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -266,7 +280,24 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
           field(name, 'Full name'),
           field(mobile, 'Mobile number', keyboard: TextInputType.phone),
           field(address, 'Address'),
-          field(vehicleType, 'Vehicle type'),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DropdownButtonFormField<String>(
+              value: vehicleType.text.isEmpty ? null : vehicleType.text,
+              decoration: const InputDecoration(
+                labelText: 'Vehicle type',
+                border: OutlineInputBorder(),
+              ),
+              hint: const Text('Select vehicle type'),
+              items: vehicleTypeOptions.map((type) => DropdownMenuItem<String>(
+                value: type,
+                child: Text(_vehicleLabel(type)),
+              )).toList(),
+              onChanged: busy ? null : (value) {
+                if (value != null) setState(() => vehicleType.text = value);
+              },
+            ),
+          ),
           field(vehicleNumber, 'Vehicle number'),
           OutlinedButton.icon(
             onPressed: busy ? null : _chooseProfilePhoto,
