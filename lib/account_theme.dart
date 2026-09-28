@@ -75,7 +75,9 @@ class _AccountSettingsPageState extends State<AccountSettingsPage>{
     try{
       final u=FirebaseAuth.instance.currentUser;
       if(u==null)throw Exception('No signed-in account.');
-      try{await u.delete();}on FirebaseAuthException catch(e){
+      try{
+        await u.delete();
+      }on FirebaseAuthException catch(e){
         if(e.code!='requires-recent-login')rethrow;
         final providers=u.providerData.map((p)=>p.providerId).toList();
         if(providers.contains('google.com')){
@@ -85,17 +87,14 @@ class _AccountSettingsPageState extends State<AccountSettingsPage>{
           final id=gu.authentication.idToken;
           if(id==null||id.isEmpty)throw Exception('Google re-authentication failed.');
           await u.reauthenticateWithCredential(GoogleAuthProvider.credential(idToken:id));
-          await FirebaseFirestore.instance.collection(widget.collection).doc(u.uid).delete().catchError((_){ });
-          await u.delete();
         }else{
           final password=await _passwordDialog();
           if(password==null||password.isEmpty)throw Exception('Deletion cancelled.');
-          final credential=EmailAuthProvider.credential(email:u.email??'',password:password);
-          await u.reauthenticateWithCredential(credential);
-          await u.delete();
+          await u.reauthenticateWithCredential(EmailAuthProvider.credential(email:u.email??'',password:password));
         }
       }
       await FirebaseFirestore.instance.collection(widget.collection).doc(u.uid).delete().catchError((_){});
+      await u.delete().catchError((_){});
       await FirebaseAuth.instance.signOut();
       if(mounted)Navigator.of(context).popUntil((r)=>r.isFirst);
     }catch(e){
