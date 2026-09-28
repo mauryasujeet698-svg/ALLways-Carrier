@@ -14,6 +14,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'account_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 const purple=Color(0xFF5B1ACF);
@@ -28,13 +29,16 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize();
+  await appThemeController.load();
   FirebaseMessaging.onBackgroundMessage(_background);
   runApp(const AllwaysCarrierApp());
 }
 
 class AllwaysCarrierApp extends StatelessWidget {
   const AllwaysCarrierApp({super.key});
-  @override Widget build(BuildContext context)=>MaterialApp(
+  @override Widget build(BuildContext context)=>ValueListenableBuilder<ThemeMode>(
+    valueListenable:appThemeController,
+    builder:(context,mode,_)=>MaterialApp(
     debugShowCheckedModeBanner:false,
     title:'ALLways Carrier',
     theme:ThemeData(
@@ -44,7 +48,10 @@ class AllwaysCarrierApp extends StatelessWidget {
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
     ),
+    themeMode:mode,
+    darkTheme:ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:purple,brightness:Brightness.dark),textTheme:GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme)),
     home:const AuthGate(),
+  ),
   );
 }
 
@@ -58,6 +65,7 @@ class AuthGate extends StatelessWidget{
    final p=a.data!.data()??{};final approval=(p['approvalStatus']??'').toString().toLowerCase();
    if(approval=='pending')return PendingApprovalPage(user:s.data!,rejected:false);
    if(approval=='rejected')return PendingApprovalPage(user:s.data!,rejected:true,reason:(p['rejectionReason']??'').toString());
+   if(approval=='suspended')return PendingApprovalPage(user:s.data!,rejected:true,reason:(p['suspensionReason']??'Account suspended by Admin.').toString());
    return CarrierShell(user:s.data!);
   });
  });
@@ -1102,6 +1110,8 @@ class CarrierProfile extends StatelessWidget{
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
     const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Contact ALLways operations for ride issues.'))),
+    Card(child:ListTile(leading:const Icon(Icons.palette_outlined,color:purple),title:const Text('Change Theme'),subtitle:const Text('Light, dark or system default'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>ThemeSettingsPage(accent:purple))))),
+    Card(child:ListTile(leading:const Icon(Icons.manage_accounts,color:purple),title:const Text('Account Settings'),subtitle:const Text('Login, sign out and account deletion'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>AccountSettingsPage(user:user,collection:'ridePartners',accent:purple,role:'carrier')))),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
 }
