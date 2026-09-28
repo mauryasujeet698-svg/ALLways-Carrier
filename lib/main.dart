@@ -353,6 +353,7 @@ class _CarrierShellState extends State<CarrierShell>{
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Admin approval is required before going online.')));
         return;
       }
+    }
     if(value&&!await _permission()){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Location permission is required before going online.')));return;}
     if(value)await _startLocation();
     final data={'status':value?'online':'offline','availableForRides':value,'statusUpdatedAt':FieldValue.serverTimestamp(),'vehicleType':vehicle};
