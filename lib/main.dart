@@ -147,6 +147,13 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
 }
 
 
+String normalizeRideVehicle(String value) {
+  final v = value.trim().toLowerCase().replaceAll('-', '_').replaceAll(' ', '_');
+  if (v == 'bike' || v == 'motorcycle' || v == 'scooter' || v == 'two_wheeler' || v == 'two_wheeler_vehicle') return 'bike';
+  if (v == 'auto' || v == 'auto_rickshaw' || v == 'e_rickshaw' || v == 'erickshaw') return 'auto';
+  return v;
+}
+
 class PartnerRegistrationPage extends StatefulWidget {
   final User user;
   const PartnerRegistrationPage({super.key, required this.user});
@@ -214,7 +221,7 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
         'phone': mobile.text.trim(),
         'mobileNumber': mobile.text.trim(),
         'address': address.text.trim(),
-        'vehicleType': vehicleType.text.trim().toLowerCase(),
+        'vehicleType': normalizeRideVehicle(vehicleType.text),
         'vehicleNumber': vehicleNumber.text.trim().toUpperCase(),
         'profilePhotoUrl': profileUrl,
         'vehiclePhotoUrl': vehicleUrl,
@@ -371,7 +378,7 @@ class _CarrierShellState extends State<CarrierShell>{
       final x=r.data()??{};
       online=(x['status']??'offline').toString().toLowerCase()=='online';
       activeRideId=(x['activeRideId']??'').toString();if(activeRideId!.isEmpty)activeRideId=null;
-      vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
+      vehicle=normalizeRideVehicle((x['vehicleType']??'bike').toString());
       await _startLocation();
     }catch(_){}
     if(mounted)setState((){});
@@ -436,7 +443,7 @@ class _CarrierShellState extends State<CarrierShell>{
         final latest=await tx.get(doc.reference);final x=latest.data()??{};
         if((x['status']??'').toString().toLowerCase()!='searching')throw Exception('Ride already accepted.');
         final p=await tx.get(FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid));final profile=p.data()??{};
-        final requested=(x['rideType']??'bike').toString().toLowerCase();final mine=(profile['vehicleType']??vehicle).toString().toLowerCase();final normalized=mine=='two_wheeler'?'bike':mine;
+        final requested=normalizeRideVehicle((x['rideType']??'bike').toString());final normalized=normalizeRideVehicle((profile['vehicleType']??vehicle).toString());
         if(requested!=normalized)throw Exception('This ride is for a different vehicle type.');
         tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Carrier','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
         tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
@@ -454,7 +461,7 @@ class _CarrierShellState extends State<CarrierShell>{
   Future<void> _vehicleDialog()async{
     final c=TextEditingController(text:vehicle);
     final ok=await showDialog<bool>(context:context,builder:(d)=>AlertDialog(title:const Text('Vehicle type'),content:TextField(controller:c,decoration:const InputDecoration(hintText:'bike / auto / car')),actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(d,true),child:const Text('Save'))]));
-    if(ok==true){vehicle=c.text.trim().toLowerCase().replaceAll('two_wheeler','bike');await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':vehicle},SetOptions(merge:true));if(mounted)setState((){});}
+    if(ok==true){vehicle=normalizeRideVehicle(c.text);await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':vehicle},SetOptions(merge:true));if(mounted)setState((){});}
   }
   @override Widget build(BuildContext context){
     final pages=[
