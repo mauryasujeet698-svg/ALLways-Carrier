@@ -471,7 +471,7 @@ class _CarrierShellState extends State<CarrierShell>{
   }
   @override Widget build(BuildContext context){
     final pages=[
-      CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
+      CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onActiveRide:()=>setState(()=>tab=2)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_start,onComplete:_complete),
       CarrierEarnings(user:widget.user),
@@ -498,6 +498,7 @@ class CarrierHome extends StatelessWidget {
   final Position? position;
   final String? activeRideId;
   final Future<void> Function(bool) onOnline;
+  final VoidCallback onActiveRide;
 
   const CarrierHome({
     super.key,
@@ -505,6 +506,7 @@ class CarrierHome extends StatelessWidget {
     required this.position,
     required this.activeRideId,
     required this.onOnline,
+    required this.onActiveRide,
   });
 
   @override
@@ -575,6 +577,7 @@ class CarrierHome extends StatelessWidget {
             ),
             subtitle: Text('#' + activeRideId!),
             trailing: const Icon(Icons.chevron_right),
+            onTap: onActiveRide,
           ),
         ),
       );
@@ -1132,9 +1135,9 @@ class CarrierProfile extends StatelessWidget{
     const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:purple),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
-    const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
+    Card(child:ListTile(leading:const Icon(Icons.description_outlined),title:const Text('Verification'),subtitle:const Text('Keep identity and vehicle documents current.'),onTap:()=>showDialog(context:c,builder:(_)=>AlertDialog(title:const Text('Verification'),content:const Text('Your profile and vehicle verification details are stored with your ALLways rider account.'),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('Close'))])))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
-    const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Contact ALLways operations for ride issues.'))),
+    Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),onTap:()=>showDialog(context:c,builder:(_)=>AlertDialog(title:const Text('Help & Support'),content:const Text('For rider issues, contact ALLways operations with the ride ID and a short description.'),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('Close'))])))),
     Card(child:ListTile(leading:const Icon(Icons.palette_outlined,color:purple),title:const Text('Change Theme'),subtitle:const Text('Light, dark or system default'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>ThemeSettingsPage(accent:purple))))),
     Card(child:ListTile(leading:const Icon(Icons.manage_accounts,color:purple),title:const Text('Account Settings'),subtitle:const Text('Login, sign out and account deletion'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>AccountSettingsPage(user:user,collection:'ridePartners',accent:purple,role:'carrier'))))),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
