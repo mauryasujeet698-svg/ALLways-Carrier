@@ -370,7 +370,7 @@ class _CarrierShellState extends State<CarrierShell>{
   }
   Future<void> _savePosition(Position p)async{
     try{
-      await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'carrierLat':p.latitude,'carrierLng':p.longitude,'carrierLocationUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+      await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'carrierLat':p.latitude,'carrierLng':p.longitude,'carrierLocationUpdatedAt':FieldValue.serverTimestamp(),'lastLocationAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
       final id=activeRideId;
       if(id!=null)await FirebaseFirestore.instance.collection('autoRideRequests').doc(id).set({'driverLat':p.latitude,'driverLng':p.longitude,'driverLocationUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
     }catch(_){}
@@ -385,8 +385,8 @@ class _CarrierShellState extends State<CarrierShell>{
       }
     }
     if(value&&!await _permission()){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Location permission is required before going online.')));return;}
-    if(value)await _startLocation();
-    final data={'status':value?'online':'offline','availableForRides':value,'statusUpdatedAt':FieldValue.serverTimestamp(),'vehicleType':vehicle};
+    if(value)await _startLocation();else await locationSub?.cancel();
+    final data={'status':value?'online':'offline','availableForRides':value,'isOnline':value,'statusUpdatedAt':FieldValue.serverTimestamp(),'vehicleType':vehicle};
     await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set(data,SetOptions(merge:true));
     if(mounted)setState(()=>online=value);
   }
@@ -545,6 +545,7 @@ class CarrierHome extends StatelessWidget {
     }
 
     if (online) {
+      bottomItems.insert(0,Card(elevation:0,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[const CircleAvatar(backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.bolt,color:purple)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Next action',style:TextStyle(fontWeight:FontWeight.w900)),Text('Open Requests → Accept → Navigate → Complete',style:TextStyle(color:Colors.grey,fontSize:12))]))]))));
       bottomItems.add(
         const Padding(
           padding: EdgeInsets.only(top: 2),
