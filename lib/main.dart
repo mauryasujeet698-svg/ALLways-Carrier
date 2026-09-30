@@ -326,7 +326,7 @@ class _CarrierShellState extends State<CarrierShell>{
       online=(x['status']??'offline').toString().toLowerCase()=='online';
       activeRideId=(x['activeRideId']??'').toString();if(activeRideId!.isEmpty)activeRideId=null;
       vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
-      await _startLocation();
+      if(online) await _startLocation();
     }catch(_){}
     if(mounted)setState((){});
   }
