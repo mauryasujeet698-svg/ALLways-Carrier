@@ -365,13 +365,17 @@ class _CarrierShellState extends State<CarrierShell>{
 
       Future<void> saveToken(String? t)async{
         if(t==null||t.isEmpty)return;
-        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set({
+        final data={
           'uid':widget.user.uid,
           'token':t,
           'role':'carrier',
           'platform':'mobile',
+          'notificationsEnabled':true,
+          'notificationPreferences':{'travelUpdates':true,'offers':true,'announcements':true},
           'updatedAt':FieldValue.serverTimestamp(),
-        },SetOptions(merge:true));
+        };
+        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set(data,SetOptions(merge:true));
+        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).set(data,SetOptions(merge:true));
       }
 
       await saveToken(await FirebaseMessaging.instance.getToken());
