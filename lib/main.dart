@@ -1200,11 +1200,35 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     const SizedBox(height:12),
     const Text('My vehicle listings',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
     const SizedBox(height:8),
-    StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(stream:FirebaseFirestore.instance.collection('vehicles').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),builder:(c,snap){
-      final docs=snap.data?.docs??[];
-      if(docs.isEmpty)return const Card(child:ListTile(title:Text('No vehicle listed yet.'),subtitle:Text('Use “Book Your Vehicle” to publish one.')));
-      return Column(children:docs.map((d){final x=d.data();return Card(child:ListTile(leading:const Icon(Icons.directions_car_outlined),title:Text((x['category']??'Vehicle').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text('₹'+(x['price']??0).toString()+' • '+(x['status']??'').toString()),trailing:Switch(value:(x['status']??'')=='available',onChanged:(v)=>d.reference.update({'status':v?'available':'paused'})));}).toList());
-    }),
+    StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+      stream:FirebaseFirestore.instance.collection('vehicles').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),
+      builder:(c,snap){
+        final docs=snap.data?.docs??[];
+        if(docs.isEmpty){
+          return const Card(child:ListTile(
+            title:Text('No vehicle listed yet.'),
+            subtitle:Text('Use “Book Your Vehicle” to publish one.'),
+          ));
+        }
+        return Column(
+          children:docs.map((d){
+            final x=d.data();
+            final available=(x['status']??'')=='available';
+            return Card(
+              child:ListTile(
+                leading:const Icon(Icons.directions_car_outlined),
+                title:Text((x['category']??'Vehicle').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),
+                subtitle:Text('₹'+(x['price']??0).toString()+' • '+(x['status']??'').toString()),
+                trailing:Switch(
+                  value:available,
+                  onChanged:(v)=>d.reference.update({'status':v?'available':'paused'}),
+                ),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    ),
     const SizedBox(height:14),
     const Text('Booking requests',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
     const SizedBox(height:8),
