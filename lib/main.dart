@@ -439,7 +439,7 @@ class _CarrierShellState extends State<CarrierShell>{
   @override Widget build(BuildContext context){
     final pages=[
       CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
-      RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,onAccept:_accept,onReject:_reject),
+      RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
@@ -746,14 +746,15 @@ class CarrierHome extends StatelessWidget {
 }
 
 class RideRequests extends StatelessWidget{
-  final User user;final bool online;final Position? position;final String vehicle;
+  final User user;final bool online;final Position? position;final String vehicle;final String? activeRideId;
   final Future<void> Function(QueryDocumentSnapshot<Map<String,dynamic>>) onAccept;final Future<void> Function(DocumentReference) onReject;
-  const RideRequests({super.key,required this.user,required this.online,required this.position,required this.vehicle,required this.onAccept,required this.onReject});
+  const RideRequests({super.key,required this.user,required this.online,required this.position,required this.vehicle,required this.activeRideId,required this.onAccept,required this.onReject});
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
   @override Widget build(BuildContext c)=>StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
     stream:FirebaseFirestore.instance.collection('autoRideRequests').where('status',isEqualTo:'searching').snapshots(),
     builder:(context,s){
       if(!online)return const Center(child:Text('Go online to receive ride requests.'));
+      if(activeRideId!=null&&activeRideId!.isNotEmpty)return const Center(child:Padding(padding:EdgeInsets.all(28),child:Text('You already have an active ride. Complete it before accepting another ride.',textAlign:TextAlign.center)));
       if(position==null)return const Center(child:Text('Live location is required to match rides.'));
       if(!s.hasData)return const Center(child:CircularProgressIndicator());
       final list=<QueryDocumentSnapshot<Map<String,dynamic>>>[];
