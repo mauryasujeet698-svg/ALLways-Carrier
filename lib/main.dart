@@ -317,18 +317,40 @@ class CarrierShell extends StatefulWidget{
 class _CarrierShellState extends State<CarrierShell>{
   int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;
   StreamSubscription<Position>? locationSub;
+  StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
   @override void initState(){super.initState();_load();_notifications();}
-  @override void dispose(){locationSub?.cancel();super.dispose();}
+  @override void dispose(){locationSub?.cancel();activeRideSub?.cancel();super.dispose();}
   Future<void> _load()async{
     try{
       final r=await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).get();
       final x=r.data()??{};
       online=(x['status']??'offline').toString().toLowerCase()=='online';
       activeRideId=(x['activeRideId']??'').toString();if(activeRideId!.isEmpty)activeRideId=null;
+      _watchActiveRide();
       vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
       if(online) await _startLocation();
     }catch(_){}
     if(mounted)setState((){});
+  }
+  void _watchActiveRide(){
+    activeRideSub?.cancel();
+    final id=activeRideId;
+    if(id==null||id.isEmpty)return;
+    final ref=FirebaseFirestore.instance.collection('autoRideRequests').doc(id);
+    activeRideSub=ref.snapshots().listen((snap)async{
+      final status=(snap.data()?['status']??'').toString().toLowerCase();
+      if(status=='cancelled'||status=='completed'){
+        await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({
+          'status':'online',
+          'availableForRides':true,
+          'isOnline':true,
+          'activeRideId':null,
+          'statusUpdatedAt':FieldValue.serverTimestamp(),
+        },SetOptions(merge:true));
+        if(mounted)setState(()=>activeRideId=null);
+        await activeRideSub?.cancel();
+      }
+    });
   }
   Future<void> _notifications()async{
     try{
