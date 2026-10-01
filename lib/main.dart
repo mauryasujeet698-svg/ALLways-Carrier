@@ -489,6 +489,7 @@ class _CarrierShellState extends State<CarrierShell>{
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
+      CarrierVehiclePage(user:widget.user),
     ];
     return Scaffold(
       body:SafeArea(child:IndexedStack(index:tab,children:pages)),
@@ -500,6 +501,7 @@ class _CarrierShellState extends State<CarrierShell>{
           NavigationDestination(icon:Icon(Icons.navigation_outlined),selectedIcon:Icon(Icons.navigation),label:'Active Ride'),
           NavigationDestination(icon:Icon(Icons.currency_rupee_outlined),selectedIcon:Icon(Icons.currency_rupee),label:'Earnings'),
           NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'Profile'),
+          NavigationDestination(icon:Icon(Icons.directions_car_outlined),selectedIcon:Icon(Icons.directions_car),label:'Vehicle'),
         ],
       ),
     );
@@ -1144,6 +1146,74 @@ class CarrierEarnings extends StatelessWidget{
       return ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[const Text('Earnings & Ratings',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),Row(children:[Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.currency_rupee,color:purple),const SizedBox(height:8),Text('₹'+earned.toStringAsFixed(0),style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const Text('Recorded earnings',style:TextStyle(color:Colors.grey))])))),const SizedBox(width:10),Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.star,color:Colors.amber),const SizedBox(height:8),Text(avg.toStringAsFixed(1),style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),Text(ratings==0?'No ratings yet':ratings.toString()+' ratings',style:const TextStyle(color:Colors.grey))]))))]),const SizedBox(height:12),Card(child:ListTile(leading:const Icon(Icons.check_circle,color:Colors.green),title:Text(done.toString(),style:const TextStyle(fontSize:21,fontWeight:FontWeight.w900)),subtitle:const Text('Completed rides')))]);
     },
   );
+}
+
+
+class CarrierVehiclePage extends StatefulWidget{
+  final User user;
+  const CarrierVehiclePage({super.key,required this.user});
+  @override State<CarrierVehiclePage> createState()=>_CarrierVehiclePageState();
+}
+class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
+  final categories=['Motorcycle','Scooter','E-bike','Auto Rickshaw','E-Rickshaw','Hatchback','Sedan','SUV','MUV','Luxury Car','Taxi / Cab','Tempo Traveller','Van','Mini Bus','Bus','Pickup Truck','Mini Truck','Bolero Pickup','Goods Auto','Cargo Van','Tractor','Tractor Trolley','Trailer','Ambulance','Other'];
+  Future<void> _listVehicle()async{
+    final category=ValueNotifier('Motorcycle');final price=TextEditingController();final capacity=TextEditingController();final phone=TextEditingController();final city=TextEditingController();final pincode=TextEditingController();bool negotiate=true;
+    try{
+      final ok=await showDialog<bool>(context:context,builder:(c)=>StatefulBuilder(builder:(c,setD)=>AlertDialog(
+        title:const Text('List your vehicle'),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          ValueListenableBuilder<String>(valueListenable:category,builder:(_,v,__)=>DropdownButtonFormField<String>(initialValue:v,decoration:const InputDecoration(labelText:'Vehicle category'),items:categories.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:(x){if(x!=null)category.value=x;})),
+          TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'Contact number')),
+          TextField(controller:city,decoration:const InputDecoration(labelText:'City / town')),
+          TextField(controller:pincode,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Pincode')),
+          TextField(controller:capacity,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Seats / capacity')),
+          TextField(controller:price,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Price (₹)')),
+          SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Allow negotiation'),value:negotiate,onChanged:(v)=>setD(()=>negotiate=v)),
+        ])),
+        actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Publish'))],
+      )));
+      if(ok!=true)return;
+      final cleanPhone=phone.text.replaceAll(RegExp(r'\D'),'');
+      final cleanPrice=num.tryParse(price.text.trim())??0;
+      if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
+      await FirebaseFirestore.instance.collection('vehicles').add({
+        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Carrier','ownerPhone':cleanPhone,
+        'category':category.value,'price':cleanPrice,'capacity':num.tryParse(capacity.text.trim())??0,
+        'allowNegotiation':negotiate,'status':'available','manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
+        'createdAt':FieldValue.serverTimestamp(),
+      });
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Vehicle listed successfully.')));
+    }finally{category.dispose();price.dispose();capacity.dispose();phone.dispose();city.dispose();pincode.dispose();}
+  }
+  Future<void> _updateBooking(DocumentReference ref,String status)async{
+    try{
+      await ref.update({'status':status,'updatedAt':FieldValue.serverTimestamp()});
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Booking $status.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not update booking: '+e.toString())));}
+  }
+  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
+    const Text('Vehicle',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),
+    const SizedBox(height:6),
+    const Text('Offer your vehicle and manage customer booking requests from one place.',style:TextStyle(color:Colors.grey)),
+    const SizedBox(height:14),
+    Card(child:ListTile(leading:const Icon(Icons.add_business_outlined,color:purple),title:const Text('Book Your Vehicle',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:const Text('List your vehicle, set your own price and receive booking requests.'),trailing:const Icon(Icons.chevron_right),onTap:_listVehicle)),
+    const SizedBox(height:12),
+    const Text('My vehicle listings',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
+    const SizedBox(height:8),
+    StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(stream:FirebaseFirestore.instance.collection('vehicles').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),builder:(c,snap){
+      final docs=snap.data?.docs??[];
+      if(docs.isEmpty)return const Card(child:ListTile(title:Text('No vehicle listed yet.'),subtitle:Text('Use “Book Your Vehicle” to publish one.')));
+      return Column(children:docs.map((d){final x=d.data();return Card(child:ListTile(leading:const Icon(Icons.directions_car_outlined),title:Text((x['category']??'Vehicle').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text('₹'+(x['price']??0).toString()+' • '+(x['status']??'').toString()),trailing:Switch(value:(x['status']??'')=='available',onChanged:(v)=>d.reference.update({'status':v?'available':'paused'})));}).toList());
+    }),
+    const SizedBox(height:14),
+    const Text('Booking requests',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
+    const SizedBox(height:8),
+    StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(stream:FirebaseFirestore.instance.collection('vehicleBookings').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),builder:(c,snap){
+      final docs=snap.data?.docs??[];
+      if(docs.isEmpty)return const Card(child:ListTile(title:Text('No booking requests yet.')));
+      return Column(children:docs.map((d){final x=d.data();final status=(x['status']??'Booked').toString();final pending=!['accepted','rejected','cancelled','delivered'].contains(status.toLowerCase());return Card(child:ListTile(title:Text((x['customerName']??'Customer').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text(status+' • '+(x['category']??'Vehicle').toString()+' • ₹'+(x['listedPrice']??0).toString()),trailing:pending?Wrap(children:[TextButton(onPressed:()=>_updateBooking(d.reference,'Rejected'),child:const Text('Reject')),FilledButton(onPressed:()=>_updateBooking(d.reference,'Accepted'),child:const Text('Accept'))]):Text(status)));}).toList());
+    }),
+  ]);
 }
 
 class CarrierProfile extends StatelessWidget{
