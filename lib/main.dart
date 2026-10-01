@@ -820,6 +820,11 @@ class ActiveRide extends StatefulWidget {
 class _ActiveRideState extends State<ActiveRide> {
   List<LatLng> route = [];
   bool routeLoading = false;
+  final MapController mapController = MapController();
+  bool mapReady = false;
+  DateTime? lastCameraMove;
+  List<Map<String,dynamic>> navSteps = [];
+  int activeStep = 0;
 
   double number(dynamic value) {
     if (value is num) return value.toDouble();
@@ -839,7 +844,7 @@ class _ActiveRideState extends State<ActiveRide> {
         'https://router.project-osrm.org/route/v1/driving/'
         '${start.longitude},${start.latitude};'
         '${end.longitude},${end.latitude}'
-        '?overview=full&geometries=geojson',
+        '?overview=full&geometries=geojson&steps=true',
       );
       final response = await http.get(url);
       if (response.statusCode != 200) return;
@@ -859,9 +864,22 @@ class _ActiveRideState extends State<ActiveRide> {
           )
           .toList();
 
-      if (mounted) {
-        setState(() => route = points);
+      final steps=<Map<String,dynamic>>[];
+      final legs=body['routes']?[0]?['legs'];
+      if(legs is List)for(final leg in legs){
+        final raw=leg['steps'];
+        if(raw is! List)continue;
+        for(final step in raw){
+          final m=step['maneuver'] is Map?Map<String,dynamic>.from(step['maneuver']):<String,dynamic>{};
+          final type=(m['type']??'').toString();
+          final modifier=(m['modifier']??'').toString();
+          final distance=step['distance'] is num?(step['distance'] as num).toDouble():0;
+          final loc=m['location'] is List&&(m['location'] as List).length>=2?LatLng(((m['location'] as List)[1] as num).toDouble(),((m['location'] as List)[0] as num).toDouble()):null;
+          final instruction=type=='arrive'?'You have arrived':type=='depart'?'Start on the current road':modifier.isEmpty?'Continue straight':modifier.replaceAll('_',' ');
+          steps.add({'instruction':instruction,'modifier':modifier,'distance':distance,'road':(step['name']??'').toString(),'location':loc});
+        }
       }
+      if (mounted) setState(() { route=points; navSteps=steps; activeStep=0; });
     } catch (_) {}
   }
 
