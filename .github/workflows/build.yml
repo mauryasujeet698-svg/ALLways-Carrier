@@ -104,33 +104,33 @@ jobs:
           PY
 
           cat > android/app/src/main/kotlin/com/allways/carrier/MainActivity.kt <<'KOTLIN'
-package com.allways.carrier
+          package com.allways.carrier
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.os.Build
-import android.os.Bundle
-import io.flutter.embedding.android.FlutterActivity
+          import android.app.NotificationChannel
+          import android.app.NotificationManager
+          import android.os.Build
+          import android.os.Bundle
+          import io.flutter.embedding.android.FlutterActivity
 
-class MainActivity : FlutterActivity() {
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(
-                NotificationChannel(
-                    "allways_updates",
-                    "ALLways Updates",
-                    NotificationManager.IMPORTANCE_HIGH
-                ).apply {
-                    description = "Order, delivery and ALLways alerts"
-                    enableVibration(true)
-                }
-            )
-        }
-    }
-}
-KOTLIN
+          class MainActivity : FlutterActivity() {
+              override fun onCreate(savedInstanceState: Bundle?) {
+                  super.onCreate(savedInstanceState)
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                      val manager = getSystemService(NotificationManager::class.java)
+                      manager.createNotificationChannel(
+                          NotificationChannel(
+                              "allways_updates",
+                              "ALLways Updates",
+                              NotificationManager.IMPORTANCE_HIGH
+                          ).apply {
+                              description = "Order, delivery and ALLways alerts"
+                              enableVibration(true)
+                          }
+                      )
+                  }
+              }
+          }
+          KOTLIN
       - name: Configure release signing
         shell: bash
         env:
