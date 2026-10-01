@@ -1234,7 +1234,6 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
         );
       },
     ),
-),
   ]);
 }
 
