@@ -131,7 +131,7 @@ class MainActivity : FlutterActivity() {
     }
 }
 KOTLIN
-                - name: Configure release signing
+      - name: Configure release signing
         shell: bash
         env:
           KEYSTORE_B64: ${{ secrets.ALLWAYS_KEYSTORE_BASE64 }}
