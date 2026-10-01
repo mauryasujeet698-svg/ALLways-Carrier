@@ -398,6 +398,9 @@ class _CarrierShellState extends State<CarrierShell>{
         final latest=await tx.get(doc.reference);final x=latest.data()??{};
         if((x['status']??'').toString().toLowerCase()!='searching')throw Exception('Ride already accepted.');
         final p=await tx.get(FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid));final profile=p.data()??{};
+        final existingActive=(profile['activeRideId']??'').toString().trim();
+        final partnerStatus=(profile['status']??'').toString().toLowerCase();
+        if(existingActive.isNotEmpty||partnerStatus=='on_trip')throw Exception('Complete your current ride before accepting another ride.');
         final requested=(x['rideType']??'bike').toString().toLowerCase();final mine=(profile['vehicleType']??vehicle).toString().toLowerCase();final normalized=mine=='two_wheeler'?'bike':mine;
         if(requested!=normalized)throw Exception('This ride is for a different vehicle type.');
         tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Carrier','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
