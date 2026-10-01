@@ -96,13 +96,42 @@ jobs:
                 <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
                 <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
               </activity>
+              <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="allways_updates"/>
               <meta-data android:name="flutterEmbedding" android:value="2"/>
             </application>
           </manifest>
           """)
           PY
 
-      - name: Configure release signing
+          cat > android/app/src/main/kotlin/com/allways/carrier/MainActivity.kt <<'KOTLIN'
+package com.allways.carrier
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.os.Build
+import android.os.Bundle
+import io.flutter.embedding.android.FlutterActivity
+
+class MainActivity : FlutterActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val manager = getSystemService(NotificationManager::class.java)
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    "allways_updates",
+                    "ALLways Updates",
+                    NotificationManager.IMPORTANCE_HIGH
+                ).apply {
+                    description = "Order, delivery and ALLways alerts"
+                    enableVibration(true)
+                }
+            )
+        }
+    }
+}
+KOTLIN
+                - name: Configure release signing
         shell: bash
         env:
           KEYSTORE_B64: ${{ secrets.ALLWAYS_KEYSTORE_BASE64 }}
