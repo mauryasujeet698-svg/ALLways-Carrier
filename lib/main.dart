@@ -1208,11 +1208,33 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     const SizedBox(height:14),
     const Text('Booking requests',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
     const SizedBox(height:8),
-    StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(stream:FirebaseFirestore.instance.collection('vehicleBookings').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),builder:(c,snap){
-      final docs=snap.data?.docs??[];
-      if(docs.isEmpty)return const Card(child:ListTile(title:Text('No booking requests yet.')));
-      return Column(children:docs.map((d){final x=d.data();final status=(x['status']??'Booked').toString();final pending=!['accepted','rejected','cancelled','delivered'].contains(status.toLowerCase());return Card(child:ListTile(title:Text((x['customerName']??'Customer').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text(status+' • '+(x['category']??'Vehicle').toString()+' • ₹'+(x['listedPrice']??0).toString()),trailing:pending?Wrap(children:[TextButton(onPressed:()=>_updateBooking(d.reference,'Rejected'),child:const Text('Reject')),FilledButton(onPressed:()=>_updateBooking(d.reference,'Accepted'),child:const Text('Accept'))]):Text(status)));}).toList());
-    }),
+    StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+      stream:FirebaseFirestore.instance.collection('vehicleBookings').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),
+      builder:(c,snap){
+        final docs=snap.data?.docs??[];
+        if(docs.isEmpty)return const Card(child:ListTile(title:Text('No booking requests yet.')));
+        return Column(
+          children:docs.map((d){
+            final x=d.data();
+            final status=(x['status']??'Booked').toString();
+            final pending=!['accepted','rejected','cancelled','delivered'].contains(status.toLowerCase());
+            return Card(
+              child:ListTile(
+                title:Text((x['customerName']??'Customer').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),
+                subtitle:Text(status+' • '+(x['category']??'Vehicle').toString()+' • ₹'+(x['listedPrice']??0).toString()),
+                trailing:pending
+                  ? Row(mainAxisSize:MainAxisSize.min,children:[
+                      TextButton(onPressed:()=>_updateBooking(d.reference,'Rejected'),child:const Text('Reject')),
+                      FilledButton(onPressed:()=>_updateBooking(d.reference,'Accepted'),child:const Text('Accept')),
+                    ])
+                  : Text(status),
+              ),
+            );
+          }).toList(),
+        );
+      },
+    ),
+),
   ]);
 }
 
