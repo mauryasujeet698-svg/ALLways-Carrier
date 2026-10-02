@@ -339,7 +339,7 @@ class _CarrierShellState extends State<CarrierShell>{
     final ref=FirebaseFirestore.instance.collection('autoRideRequests').doc(id);
     activeRideSub=ref.snapshots().listen((snap)async{
       final status=(snap.data()?['status']??'').toString().toLowerCase();
-      if(status=='cancelled'||status=='completed'){
+      if(const {'cancelled','completed','rejected','expired'}.contains(status)){
         await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({
           'status':'online',
           'availableForRides':true,
@@ -811,7 +811,13 @@ class RideRequests extends StatelessWidget{
       if(!s.hasData)return const Center(child:CircularProgressIndicator());
       final list=<QueryDocumentSnapshot<Map<String,dynamic>>>[];
       for(final d in s.data!.docs){
-        final x=d.data();final rejected=x['rejectedBy'] is List?List.from(x['rejectedBy']):<dynamic>[];
+        final x=d.data();
+        final st=(x['status']??'').toString().trim().toLowerCase();
+        if(st!='searching')continue;
+        if(x['cancelledAt']!=null||x['completedAt']!=null||x['endedAt']!=null||x['rejectedAt']!=null||x['expiredAt']!=null)continue;
+        final assignedUid=(x['driverUid']??x['carrierUid']??x['deliveryPartnerUid']??x['assignedPartnerId']??'').toString().trim();
+        if(assignedUid.isNotEmpty)continue;
+        final rejected=x['rejectedBy'] is List?List.from(x['rejectedBy']):<dynamic>[];
         if(rejected.contains(user.uid))continue;
         final type=(x['rideType']??'bike').toString().toLowerCase();if(type!=vehicle)continue;
         final lat=n(x['pickupLatitude']??x['pickupLat']);final lng=n(x['pickupLongitude']??x['pickupLng']);if(lat==0||lng==0)continue;
