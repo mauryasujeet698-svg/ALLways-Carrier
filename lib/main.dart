@@ -1200,7 +1200,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     const SizedBox(height:6),
     const Text('Offer your vehicle and manage customer booking requests from one place.',style:TextStyle(color:Colors.grey)),
     const SizedBox(height:14),
-    Card(child:ListTile(leading:const Icon(Icons.add_business_outlined,color:purple),title:const Text('Book Your Vehicle',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:const Text('List your vehicle, set your own price and receive booking requests.'),trailing:const Icon(Icons.chevron_right),onTap:_listVehicle)),
+    Card(child:ListTile(leading:const Icon(Icons.add_business_outlined,color:purple),title:const Text('Offer your vehicle',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:const Text('List your vehicle, set your own price and receive booking requests.'),trailing:const Icon(Icons.chevron_right),onTap:_listVehicle)),
     const SizedBox(height:12),
     const Text('My vehicle listings',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
     const SizedBox(height:8),
