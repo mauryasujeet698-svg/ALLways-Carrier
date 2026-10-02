@@ -678,7 +678,7 @@ class CarrierHome extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               online
-                                  ? 'Online • accepting rides within 7 km'
+                                  ? 'Online • accepting rides within 25 km'
                                   : 'Offline • turn on to receive rides',
                               style: const TextStyle(
                                 color: Colors.grey,
@@ -821,9 +821,9 @@ class RideRequests extends StatelessWidget{
         if(rejected.contains(user.uid))continue;
         final type=(x['rideType']??'bike').toString().toLowerCase();if(type!=vehicle)continue;
         final lat=n(x['pickupLatitude']??x['pickupLat']);final lng=n(x['pickupLongitude']??x['pickupLng']);if(lat==0||lng==0)continue;
-        if(Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)<=7000)list.add(d);
+        if(Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)<=25000)list.add(d);
       }
-      if(list.isEmpty)return const Center(child:Padding(padding:EdgeInsets.all(28),child:Text('No ride requests within 7 km right now.',textAlign:TextAlign.center)));
+      if(list.isEmpty)return const Center(child:Padding(padding:EdgeInsets.all(28),child:Text('No ride requests within 25 km right now.',textAlign:TextAlign.center)));
       return ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
         const Text('Ride Requests',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
         ...list.map((d){final x=d.data();final lat=n(x['pickupLatitude']??x['pickupLat']);final lng=n(x['pickupLongitude']??x['pickupLng']);final km=Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)/1000;
@@ -1188,9 +1188,10 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
       if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
       await FirebaseFirestore.instance.collection('vehicles').add({
         'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Carrier','ownerPhone':cleanPhone,
-        'category':category.value,'price':cleanPrice,'capacity':num.tryParse(capacity.text.trim())??0,
-        'allowNegotiation':negotiate,'status':'available','manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
-        'createdAt':FieldValue.serverTimestamp(),
+        'category':category.value,'vehicleType':category.value,'price':cleanPrice,'capacity':num.tryParse(capacity.text.trim())??0,
+        'allowNegotiation':negotiate,'status':'available','listingStatus':'active','available':true,
+        'manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
+        'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp(),
       });
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Vehicle listed successfully.')));
     }finally{category.dispose();price.dispose();capacity.dispose();phone.dispose();city.dispose();pincode.dispose();}
@@ -1213,17 +1214,25 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
       stream:FirebaseFirestore.instance.collection('vehicles').where('ownerUid',isEqualTo:widget.user.uid).snapshots(),
       builder:(c,snap){
+        if(snap.hasError){
+          return Card(child:ListTile(
+            leading:const Icon(Icons.error_outline,color:Colors.red),
+            title:const Text('Could not load vehicle listings.'),
+            subtitle:Text(snap.error.toString()),
+          ));
+        }
         final docs=snap.data?.docs??[];
         if(docs.isEmpty){
           return const Card(child:ListTile(
             title:Text('No vehicle listed yet.'),
-            subtitle:Text('Use “Book Your Vehicle” to publish one.'),
+            subtitle:Text('Use “Offer your vehicle” to publish one.'),
           ));
         }
         return Column(
           children:docs.map((d){
             final x=d.data();
-            final available=(x['status']??'')=='available';
+            final listingStatus=(x['status']??x['listingStatus']??'').toString().toLowerCase();
+            final available=(x['available']==false)?false:const {'available','active','published','listed'}.contains(listingStatus);
             return Card(
               child:ListTile(
                 leading:const Icon(Icons.directions_car_outlined),
@@ -1231,7 +1240,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
                 subtitle:Text('₹'+(x['price']??0).toString()+' • '+(x['status']??'').toString()),
                 trailing:Switch(
                   value:available,
-                  onChanged:(v)=>d.reference.update({'status':v?'available':'paused'}),
+                  onChanged:(v)=>d.reference.update({'status':v?'available':'paused','listingStatus':v?'active':'paused','available':v,'updatedAt':FieldValue.serverTimestamp()}),
                 ),
               ),
             );
