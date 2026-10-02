@@ -1179,7 +1179,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
       if(ok!=true)return;
       final cleanPhone=phone.text.replaceAll(RegExp(r'\D'),'');
       final cleanPrice=num.tryParse(price.text.trim())??0;
-      if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
+      if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
       await FirebaseFirestore.instance.collection('vehicles').add({
         'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Carrier','ownerPhone':cleanPhone,
         'category':category.value,'price':cleanPrice,'capacity':num.tryParse(capacity.text.trim())??0,
