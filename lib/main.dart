@@ -977,9 +977,10 @@ class _ActiveRideState extends State<ActiveRide> {
           data['customerLng'] ?? data['pickupLongitude'],
         );
 
-        if (!routeLoading && route.isEmpty && pickup != null && destination != null) {
+        if (!routeLoading && driver != null && customer != null && (route.isEmpty || status.toLowerCase() == 'accepted' || status.toLowerCase() == 'started')) {
           routeLoading = true;
-          loadRoute(pickup, destination);
+          final target = status.toLowerCase() == 'started' ? (destination ?? customer) : customer;
+          loadRoute(driver, target);
         }
 
         final center =
@@ -1078,7 +1079,7 @@ class _ActiveRideState extends State<ActiveRide> {
                                 style: TextStyle(fontWeight: FontWeight.w900),
                               ),
                               Text(
-                                status,
+                                status + (customer != null && driver != null ? ' • Customer ' + (Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude) < 1000 ? Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude).round().toString() + ' m away' : (Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude) / 1000).toStringAsFixed(1) + ' km away') : ''),
                                 style: const TextStyle(
                                   color: Colors.grey,
                                   fontSize: 12,
