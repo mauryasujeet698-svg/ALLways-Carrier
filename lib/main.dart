@@ -977,9 +977,9 @@ class _ActiveRideState extends State<ActiveRide> {
           data['customerLng'] ?? data['pickupLongitude'],
         );
 
-        if (!routeLoading && driver != null && customer != null && (route.isEmpty || status.toLowerCase() == 'accepted' || status.toLowerCase() == 'started')) {
+        if (!routeLoading && driver != null && customer != null && (route.isEmpty || (data['status']??'accepted').toString().toLowerCase() == 'accepted' || (data['status']??'accepted').toString().toLowerCase() == 'started')) {
           routeLoading = true;
-          final target = status.toLowerCase() == 'started' ? (destination ?? customer) : customer;
+          final target = (data['status']??'accepted').toString().toLowerCase() == 'started' ? (destination ?? customer) : customer;
           loadRoute(driver, target);
         }
 
