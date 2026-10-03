@@ -504,7 +504,7 @@ class _CarrierShellState extends State<CarrierShell>{
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
-      CarrierVehiclePage(user:widget.user),
+      CarrierVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
       body:SafeArea(child:IndexedStack(index:tab,children:pages)),
@@ -1173,7 +1173,8 @@ class CarrierEarnings extends StatelessWidget{
 
 class CarrierVehiclePage extends StatefulWidget{
   final User user;
-  const CarrierVehiclePage({super.key,required this.user});
+  final Future<void> Function() onRideVehicle;
+  const CarrierVehiclePage({super.key,required this.user,required this.onRideVehicle});
   @override State<CarrierVehiclePage> createState()=>_CarrierVehiclePageState();
 }
 class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
@@ -1219,7 +1220,21 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     const SizedBox(height:6),
     const Text('Offer your vehicle and manage customer booking requests from one place.',style:TextStyle(color:Colors.grey)),
     const SizedBox(height:14),
-    Card(child:ListTile(leading:const Icon(Icons.add_business_outlined,color:purple),title:const Text('Offer your vehicle',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:const Text('List your vehicle, set your own price and receive booking requests.'),trailing:const Icon(Icons.chevron_right),onTap:_listVehicle)),
+    Card(child:ListTile(
+      leading:const Icon(Icons.event_available_outlined,color:purple),
+      title:const Text('List your vehicle for bookings',style:TextStyle(fontWeight:FontWeight.w900)),
+      subtitle:const Text('Publish your vehicle so customers can book it.'),
+      trailing:const Icon(Icons.chevron_right),
+      onTap:_listVehicle,
+    )),
+    const SizedBox(height:8),
+    Card(child:ListTile(
+      leading:const Icon(Icons.two_wheeler,color:purple),
+      title:const Text('Your vehicle for riding',style:TextStyle(fontWeight:FontWeight.w900)),
+      subtitle:const Text('Set the vehicle you use to accept ALLways rides.'),
+      trailing:const Icon(Icons.chevron_right),
+      onTap:widget.onRideVehicle,
+    )),
     const SizedBox(height:12),
     const Text('My vehicle listings',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
     const SizedBox(height:8),
@@ -1237,7 +1252,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
         if(docs.isEmpty){
           return const Card(child:ListTile(
             title:Text('No vehicle listed yet.'),
-            subtitle:Text('Use “Offer your vehicle” to publish one.'),
+            subtitle:Text('Use “List your vehicle for bookings” to publish one.'),
           ));
         }
         return Column(
