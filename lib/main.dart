@@ -18,9 +18,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 const purple=Color(0xFF5B1ACF);
 const ivory=Color(0xFFF8F6F0);
-const _mapboxPublicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
-String _mapboxTilesUrl() => 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=' + _mapboxPublicToken;
-
 @pragma('vm:entry-point')
 Future<void> _background(RemoteMessage message) async { await Firebase.initializeApp(); }
 
