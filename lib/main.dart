@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -467,6 +468,57 @@ class _CarrierShellState extends State<CarrierShell>{
       if(mounted){setState(()=>activeRideId=doc.id);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
+  Future<void> _startRide(DocumentReference ref) async {
+    final pinController = TextEditingController();
+    try {
+      final pin = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Passenger confirmation'),
+          content: TextField(
+            controller: pinController,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            maxLength: 4,
+            decoration: const InputDecoration(
+              labelText: '4-digit confirmation number',
+              hintText: 'Enter passenger PIN',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, pinController.text.trim()),
+              child: const Text('Start ride'),
+            ),
+          ],
+        ),
+      );
+      if (pin == null || pin.length != 4) return;
+      final callable = FirebaseFunctions.instance.httpsCallable('verifyConfirmationPin');
+      await callable.call({'type': 'ride', 'id': ref.id, 'pin': pin});
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PIN verified. Ride started.')),
+        );
+      }
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.message ?? 'Could not verify the confirmation number.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not start ride: $e')),
+        );
+      }
+    } finally {
+      pinController.dispose();
+    }
+  }
+
   Future<void> _complete(DocumentReference ref)async{
     await ref.update({'status':'completed','completedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
     await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'online','availableForRides':true,'activeRideId':null,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
@@ -508,7 +560,7 @@ class _CarrierShellState extends State<CarrierShell>{
     final pages=[
       CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,onAccept:_accept,onReject:_reject),
-      ActiveRide(rideId:activeRideId,position:position,onCall:_call,onComplete:_complete),
+      ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
       CarrierVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
@@ -883,6 +935,7 @@ class ActiveRide extends StatefulWidget {
   final String? rideId;
   final Position? position;
   final Future<void> Function(String) onCall;
+  final Future<void> Function(DocumentReference) onStart;
   final Future<void> Function(DocumentReference) onComplete;
 
   const ActiveRide({
@@ -890,6 +943,7 @@ class ActiveRide extends StatefulWidget {
     required this.rideId,
     required this.position,
     required this.onCall,
+    required this.onStart,
     required this.onComplete,
   });
 
@@ -1145,12 +1199,13 @@ class _ActiveRideState extends State<ActiveRide> {
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
-                            onPressed: () =>
-                                widget.onComplete(snapshot.data!.reference),
+                            onPressed: status.toLowerCase() == 'started'
+                                ? () => widget.onComplete(snapshot.data!.reference)
+                                : () => widget.onStart(snapshot.data!.reference),
                             style: FilledButton.styleFrom(
-                              backgroundColor: Colors.green,
+                              backgroundColor: status.toLowerCase() == 'started' ? Colors.green : purple,
                             ),
-                            child: const Text('Complete ride'),
+                            child: Text(status.toLowerCase() == 'started' ? 'Complete ride' : 'Start ride'),
                           ),
                         ),
                       ],
