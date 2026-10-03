@@ -1317,6 +1317,27 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
   ]);
 }
 
+Future<void> _chooseAllwaysLanguage(BuildContext context) async {
+  final prefs = await SharedPreferences.getInstance();
+  final current = prefs.getString('app_language') ?? 'English';
+  final selected = await showDialog<String>(
+    context: context,
+    builder: (d) => SimpleDialog(
+      title: const Text('Language'),
+      children: [
+        RadioListTile<String>(value: 'English', groupValue: current, title: const Text('English'), onChanged: (v) => Navigator.pop(d, v)),
+        RadioListTile<String>(value: 'Hindi', groupValue: current, title: const Text('हिन्दी'), onChanged: (v) => Navigator.pop(d, v)),
+      ],
+    ),
+  );
+  if (selected != null) {
+    await prefs.setString('app_language', selected);
+    if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Language set to $selected.')),
+    );
+  }
+}
+
 class CarrierProfile extends StatelessWidget{
   final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;
   const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos});
@@ -1324,6 +1345,7 @@ class CarrierProfile extends StatelessWidget{
     const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:purple),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
+    Card(child:ListTile(leading:const Icon(Icons.language,color:purple),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
     const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Contact ALLways operations for ride issues.'))),
