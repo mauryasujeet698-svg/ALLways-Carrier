@@ -478,6 +478,10 @@ class _CarrierShellState extends State<CarrierShell>{
   Future<void> _call(String phone)async{final p=phone.replaceAll(RegExp(r'[^0-9+]'),'');if(p.isNotEmpty)await launchUrl(Uri(scheme:'tel',path:p),mode:LaunchMode.externalApplication);}
   Future<void> _sos()async{await FirebaseFirestore.instance.collection('sosAlerts').add({'uid':widget.user.uid,'role':'carrier','createdAt':FieldValue.serverTimestamp(),'status':'open'});if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('SOS alert sent to ALLways operations.')));}
   Future<void> _vehicleDialog()async{
+    if (activeRideId != null || online) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Go offline and complete any active ride before switching vehicle type.')));
+      return;
+    }
     final selected=await showDialog<String>(
       context:context,
       builder:(d)=>AlertDialog(
@@ -494,8 +498,14 @@ class _CarrierShellState extends State<CarrierShell>{
       ),
     );
     if(selected==null)return;
-    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'vehicleType':selected},SetOptions(merge:true));
-    if(mounted)setState(()=>vehicle=selected);
+    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({
+      'vehicleType': selected,
+      'vehicleTypeUpdatedAt': FieldValue.serverTimestamp(),
+    }, SetOptions(merge:true));
+    if(mounted){
+      setState(()=>vehicle=selected);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Vehicle switched to ${selected[0].toUpperCase()}${selected.substring(1)}.')));
+    }
   }
   @override Widget build(BuildContext context){
     final pages=[
