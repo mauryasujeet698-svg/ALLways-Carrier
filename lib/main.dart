@@ -878,6 +878,7 @@ class RideRequests extends StatelessWidget{
         final x=d.data();
         final st=(x['status']??'').toString().trim().toLowerCase();
         if(st!='searching')continue;
+        if(x['customerActive']==false)continue;
         if(x['cancelledAt']!=null||x['completedAt']!=null||x['endedAt']!=null||x['rejectedAt']!=null||x['expiredAt']!=null)continue;
         final assignedUid=(x['driverUid']??x['carrierUid']??x['deliveryPartnerUid']??x['assignedPartnerId']??'').toString().trim();
         if(assignedUid.isNotEmpty)continue;
