@@ -1,0 +1,56 @@
+name: Publish ALLways Carrier Android Release
+
+on:
+  workflow_run:
+    workflows: ["ALLways Carrier Android"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout build commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Download APK artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: allways-carrier-partner-apk
+          path: release
+          run-id: ${{ github.event.workflow_run.id || github.run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read app version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d '+' -f 1)
+          test -n "$VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare stable release assets
+        run: |
+          APK=$(find release -type f -name '*.apk' | head -n 1)
+          test -n "$APK"
+          cp "$APK" "release/allways-carrier-v${{ steps.version.outputs.version }}.apk"
+          cp "$APK" "release/allways-carrier-latest.apk"
+
+      - name: Publish latest release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: allways-latest
+          name: "ALLways allways-carrier v${{ steps.version.outputs.version }}"
+          draft: false
+          prerelease: false
+          files: |
+            release/allways-carrier-v${{ steps.version.outputs.version }}.apk
+            release/allways-carrier-latest.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
