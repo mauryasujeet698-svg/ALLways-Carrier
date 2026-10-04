@@ -80,7 +80,7 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
                         children: [
                           const Text('New ALLways update available', style: TextStyle(fontWeight: FontWeight.w900)),
                           Text(
-                            'Version $version is ready${notes.isNotEmpty ? ' • ' + notes.replaceAll(RegExp(r'\\s+'), ' ').trim() : ''}',
+                            'Version $version is ready${notes.isNotEmpty ? ' • ' + notes.replaceAll(RegExp(r'\s+), ' ').trim() : ''}',
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                             style: const TextStyle(fontSize: 12),
