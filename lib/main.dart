@@ -16,6 +16,7 @@ import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'update_service.dart';
 
 const purple=Color(0xFF5B1ACF);
 const ivory=Color(0xFFF8F6F0);
@@ -44,7 +45,7 @@ class AllwaysCarrierApp extends StatelessWidget {
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
     ),
-    home:const AuthGate(),
+    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-Carrier',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-carrier-latest.apk',child:AuthGate()),
   );
 }
 
