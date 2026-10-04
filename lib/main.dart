@@ -471,55 +471,46 @@ class _CarrierShellState extends State<CarrierShell>{
       if(mounted){setState(()=>activeRideId=doc.id);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
+  Future<void> _verifyRidePinDirect(DocumentReference ref,String pin) async {
+    final snap=await ref.get();
+    final d=snap.data()??<String,dynamic>{};
+    if((d['driverUid']??'').toString()!=widget.user.uid)throw Exception('This ride is not assigned to you.');
+    final status=(d['status']??'').toString().toLowerCase();
+    if(!['accepted','arrived'].contains(status))throw Exception('Ride is not waiting for passenger confirmation.');
+    if((d['confirmationPin']??'').toString().trim()!=pin)throw Exception('Incorrect confirmation number.');
+    await ref.update({'status':'started','ridePinVerified':true,'ridePinVerifiedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
+    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'on_trip','availableForRides':false,'activeRideId':ref.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+  }
+
   Future<void> _startRide(DocumentReference ref) async {
-    final pinController = TextEditingController();
-    try {
-      final pin = await showDialog<String>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Passenger confirmation'),
-          content: TextField(
-            controller: pinController,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            maxLength: 4,
-            decoration: const InputDecoration(
-              labelText: '4-digit confirmation number',
-              hintText: 'Enter passenger PIN',
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, pinController.text.trim()),
-              child: const Text('Start ride'),
-            ),
+    final pinController=TextEditingController();
+    try{
+      final pin=await showDialog<String>(
+        context:context,
+        builder:(dialogContext)=>AlertDialog(
+          title:const Text('Passenger confirmation'),
+          content:TextField(controller:pinController,autofocus:true,keyboardType:TextInputType.number,maxLength:4,decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN')),
+          actions:[
+            TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
+            FilledButton(onPressed:()=>Navigator.pop(dialogContext,pinController.text.trim()),child:const Text('Start ride')),
           ],
         ),
       );
-      if (pin == null || pin.length != 4) return;
-      final callable = FirebaseFunctions.instance.httpsCallable('verifyConfirmationPin');
-      await callable.call({'type': 'ride', 'id': ref.id, 'pin': pin});
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('PIN verified. Ride started.')),
-        );
+      if(pin==null||pin.length!=4)return;
+      try{
+        final callable=FirebaseFunctions.instance.httpsCallable('verifyConfirmationPin');
+        await callable.call({'type':'ride','id':ref.id,'pin':pin});
+      }on FirebaseFunctionsException catch(e){
+        if(e.code=='not-found'||e.code=='NOT_FOUND'||e.code=='unavailable'){
+          await _verifyRidePinDirect(ref,pin);
+        }else{rethrow;}
       }
-    } on FirebaseFunctionsException catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.message ?? 'Could not verify the confirmation number.')),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not start ride: $e')),
-        );
-      }
-    } finally {
-      pinController.dispose();
-    }
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PIN verified. Ride started.')));
+    }on FirebaseFunctionsException catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not verify the confirmation number.')));
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
+    }finally{pinController.dispose();}
   }
 
   Future<void> _complete(DocumentReference ref)async{
