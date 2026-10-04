@@ -19,6 +19,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 const purple=Color(0xFF5B1ACF);
 const ivory=Color(0xFFF8F6F0);
+const _mapboxPublicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
+const _mapboxTilesUrl = 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=' + _mapboxPublicToken;
 @pragma('vm:entry-point')
 Future<void> _background(RemoteMessage message) async { await Firebase.initializeApp(); }
 
@@ -690,7 +692,7 @@ class CarrierHome extends StatelessWidget {
             ),
             children: [
               TileLayer(
-                urlTemplate: '_mapboxTilesUrl()',
+                urlTemplate: _mapboxTilesUrl,
                 maxZoom: 19,
                 userAgentPackageName: 'com.allways.carrier',
               ),
@@ -784,7 +786,7 @@ class CarrierHome extends StatelessWidget {
           options: MapOptions(initialCenter: center, initialZoom: 14.5),
           children: [
             TileLayer(
-              urlTemplate: '_mapboxTilesUrl()',
+              urlTemplate: _mapboxTilesUrl,
               maxZoom: 19,
               userAgentPackageName: 'com.allways.carrier',
             ),
@@ -1106,8 +1108,7 @@ class _ActiveRideState extends State<ActiveRide> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      '_mapboxTilesUrl()',
+                  urlTemplate: _mapboxTilesUrl,
                   maxZoom: 19,
                   userAgentPackageName: 'com.allways.carrier',
                 ),
