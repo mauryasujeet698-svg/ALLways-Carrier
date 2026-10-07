@@ -402,6 +402,16 @@ class _CarrierShellState extends State<CarrierShell>{
           duration:const Duration(seconds:4),
         ));
       });
+      Future<void> openRideFromMessage(RemoteMessage message) async {
+        final rideId=(message.data['rideId']??'').toString().trim();
+        if(rideId.isEmpty)return;
+        final ride=await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
+        if(!ride.exists || (ride.data()?['driverUid']??'').toString()!=widget.user.uid)return;
+        if(mounted)setState((){activeRideId=rideId;tab=2;});
+      }
+      FirebaseMessaging.onMessageOpenedApp.listen(openRideFromMessage);
+      final initialMessage=await FirebaseMessaging.instance.getInitialMessage();
+      if(initialMessage!=null)await openRideFromMessage(initialMessage);
     }catch(_){}
   }
   Future<bool> _permission()async{
@@ -469,20 +479,9 @@ class _CarrierShellState extends State<CarrierShell>{
         tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Carrier','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
         tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
       });
-      if(mounted){setState(()=>activeRideId=doc.id);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted.')));}
+      if(mounted){setState(()=>activeRideId=doc.id);setState(()=>tab=2);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted. Opening live tracking.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
-  Future<void> _verifyRidePinDirect(DocumentReference ref,String pin) async {
-    final snap=await ref.get();
-    final d=snap.data()??<String,dynamic>{};
-    if((d['driverUid']??'').toString()!=widget.user.uid)throw Exception('This ride is not assigned to you.');
-    final status=(d['status']??'').toString().toLowerCase();
-    if(!['accepted','arrived'].contains(status))throw Exception('Ride is not waiting for passenger confirmation.');
-    if((d['confirmationPin']??'').toString().trim()!=pin)throw Exception('Incorrect confirmation number.');
-    await ref.update({'status':'started','ridePinVerified':true,'ridePinVerifiedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
-    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'on_trip','availableForRides':false,'activeRideId':ref.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-  }
-
   Future<void> _startRide(DocumentReference ref) async {
     final pinController=TextEditingController();
     try{
@@ -498,14 +497,11 @@ class _CarrierShellState extends State<CarrierShell>{
         ),
       );
       if(pin==null||pin.length!=4)return;
-      try{
-        final callable=FirebaseFunctions.instance.httpsCallable('verifyConfirmationPin');
-        await callable.call({'type':'ride','id':ref.id,'pin':pin});
-      }on FirebaseFunctionsException catch(e){
-        if(e.code=='not-found'||e.code=='NOT_FOUND'||e.code=='unavailable'){
-          await _verifyRidePinDirect(ref,pin);
-        }else{rethrow;}
-      }
+      final callable=FirebaseFunctions.instance.httpsCallable(
+        'verifyConfirmationPin',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
+      );
+      await callable.call({'type':'ride','id':ref.id,'pin':pin});
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PIN verified. Ride started.')));
     }on FirebaseFunctionsException catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not verify the confirmation number.')));
