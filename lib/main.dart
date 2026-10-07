@@ -17,6 +17,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'update_service.dart';
+import 'support_screen.dart';
 
 const purple=Color(0xFF5B1ACF);
 const ivory=Color(0xFFF8F6F0);
@@ -401,6 +402,16 @@ class _CarrierShellState extends State<CarrierShell>{
           duration:const Duration(seconds:4),
         ));
       });
+      Future<void> openRideFromMessage(RemoteMessage message) async {
+        final rideId=(message.data['rideId']??'').toString().trim();
+        if(rideId.isEmpty)return;
+        final ride=await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
+        if(!ride.exists || (ride.data()?['driverUid']??'').toString()!=widget.user.uid)return;
+        if(mounted)setState((){activeRideId=rideId;tab=2;});
+      }
+      FirebaseMessaging.onMessageOpenedApp.listen(openRideFromMessage);
+      final initialMessage=await FirebaseMessaging.instance.getInitialMessage();
+      if(initialMessage!=null)await openRideFromMessage(initialMessage);
     }catch(_){}
   }
   Future<bool> _permission()async{
@@ -468,20 +479,9 @@ class _CarrierShellState extends State<CarrierShell>{
         tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Carrier','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
         tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
       });
-      if(mounted){setState(()=>activeRideId=doc.id);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted.')));}
+      if(mounted){setState(()=>activeRideId=doc.id);setState(()=>tab=2);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted. Opening live tracking.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
-  Future<void> _verifyRidePinDirect(DocumentReference ref,String pin) async {
-    final snap=await ref.get();
-    final d=snap.data()??<String,dynamic>{};
-    if((d['driverUid']??'').toString()!=widget.user.uid)throw Exception('This ride is not assigned to you.');
-    final status=(d['status']??'').toString().toLowerCase();
-    if(!['accepted','arrived'].contains(status))throw Exception('Ride is not waiting for passenger confirmation.');
-    if((d['confirmationPin']??'').toString().trim()!=pin)throw Exception('Incorrect confirmation number.');
-    await ref.update({'status':'started','ridePinVerified':true,'ridePinVerifiedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
-    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'on_trip','availableForRides':false,'activeRideId':ref.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-  }
-
   Future<void> _startRide(DocumentReference ref) async {
     final pinController=TextEditingController();
     try{
@@ -497,14 +497,11 @@ class _CarrierShellState extends State<CarrierShell>{
         ),
       );
       if(pin==null||pin.length!=4)return;
-      try{
-        final callable=FirebaseFunctions.instance.httpsCallable('verifyConfirmationPin');
-        await callable.call({'type':'ride','id':ref.id,'pin':pin});
-      }on FirebaseFunctionsException catch(e){
-        if(e.code=='not-found'||e.code=='NOT_FOUND'||e.code=='unavailable'){
-          await _verifyRidePinDirect(ref,pin);
-        }else{rethrow;}
-      }
+      final callable=FirebaseFunctions.instance.httpsCallable(
+        'verifyConfirmationPin',
+        options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
+      );
+      await callable.call({'type':'ride','id':ref.id,'pin':pin});
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PIN verified. Ride started.')));
     }on FirebaseFunctionsException catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not verify the confirmation number.')));
@@ -514,9 +511,13 @@ class _CarrierShellState extends State<CarrierShell>{
   }
 
   Future<void> _complete(DocumentReference ref)async{
-    await ref.update({'status':'completed','completedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
-    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'online','availableForRides':true,'activeRideId':null,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-    if(mounted)setState(()=>activeRideId=null);
+    try{
+      final callable=FirebaseFunctions.instance.httpsCallable('completeRide');
+      await callable.call({'rideId':ref.id});
+      if(mounted){setState(()=>activeRideId=null);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride completed.')));}
+    }on FirebaseFunctionsException catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not complete ride.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}
   }
   Future<void> _call(String phone)async{final p=phone.replaceAll(RegExp(r'[^0-9+]'),'');if(p.isNotEmpty)await launchUrl(Uri(scheme:'tel',path:p),mode:LaunchMode.externalApplication);}
   Future<void> _sos()async{await FirebaseFirestore.instance.collection('sosAlerts').add({'uid':widget.user.uid,'role':'carrier','createdAt':FieldValue.serverTimestamp(),'status':'open'});if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('SOS alert sent to ALLways operations.')));}
@@ -556,7 +557,8 @@ class _CarrierShellState extends State<CarrierShell>{
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       CarrierEarnings(user:widget.user),
-      CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos),
+      CarrierRideHistory(user:widget.user),
+      CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>CarrierSupportScreen(user:widget.user))),),
       CarrierVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
@@ -568,6 +570,7 @@ class _CarrierShellState extends State<CarrierShell>{
           NavigationDestination(icon:Icon(Icons.near_me_outlined),selectedIcon:Icon(Icons.near_me),label:'Requests'),
           NavigationDestination(icon:Icon(Icons.navigation_outlined),selectedIcon:Icon(Icons.navigation),label:'Active Ride'),
           NavigationDestination(icon:Icon(Icons.currency_rupee_outlined),selectedIcon:Icon(Icons.currency_rupee),label:'Earnings'),
+          NavigationDestination(icon:Icon(Icons.history_outlined),selectedIcon:Icon(Icons.history),label:'History'),
           NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'Profile'),
           NavigationDestination(icon:Icon(Icons.directions_car_outlined),selectedIcon:Icon(Icons.directions_car),label:'Vehicle'),
         ],
@@ -1386,8 +1389,8 @@ Future<void> _chooseAllwaysLanguage(BuildContext context) async {
 }
 
 class CarrierProfile extends StatelessWidget{
-  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;
-  const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos});
+  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
+  const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
@@ -1395,7 +1398,25 @@ class CarrierProfile extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.language,color:purple),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
-    const Card(child:ListTile(leading:Icon(Icons.help_outline),title:Text('Help & Support'),subtitle:Text('Contact ALLways operations for ride issues.'))),
+    Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
+}
+
+class CarrierRideHistory extends StatelessWidget{
+  final User user; const CarrierRideHistory({super.key,required this.user});
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Ride History')),
+    body:StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+      stream:FirebaseFirestore.instance.collection('autoRideRequests').where('driverUid',isEqualTo:user.uid).snapshots(),
+      builder:(c,s){if(!s.hasData)return const Center(child:CircularProgressIndicator());final docs=s.data!.docs.toList();
+        docs.sort((a,b){final at=a.data()['completedAt'];final bt=b.data()['completedAt'];final am=at is Timestamp?at.millisecondsSinceEpoch:0;final bm=bt is Timestamp?bt.millisecondsSinceEpoch:0;return bm.compareTo(am);});
+        if(docs.isEmpty)return const Center(child:Text('No completed rides yet.'));
+        return ListView.builder(padding:const EdgeInsets.all(16),itemCount:docs.length,itemBuilder:(_,i){final x=docs[i].data();return Card(child:ListTile(
+          leading:const CircleAvatar(child:Icon(Icons.route)),title:Text((x['destinationAddress']??'Ride').toString(),maxLines:1,overflow:TextOverflow.ellipsis),
+          subtitle:Text((x['pickupAddress']??'Pickup').toString()+' • '+(x['status']??'').toString()),
+          trailing:Text('₹'+(x['carrierEarning']??x['estimatedFare']??x['fare']??0).toString(),style:const TextStyle(fontWeight:FontWeight.w900))));});
+      }
+    )
+  );
 }
