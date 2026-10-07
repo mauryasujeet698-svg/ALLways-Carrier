@@ -912,7 +912,7 @@ class _CarrierSearchHistoryState extends State<CarrierSearchHistory> {
       else
         Wrap(
           spacing:8,runSpacing:8,
-          children:history.map((x)=>ActionChip(label:Text(x,maxLines:1,overflow:TextOverflow.ellipsis),onPressed:()=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Selected: $x')))).toList(),
+          children:history.map((x)=>ActionChip(label:Text(x,maxLines:1,overflow:TextOverflow.ellipsis),onPressed:()=>launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query='+Uri.encodeComponent(x)),mode:LaunchMode.externalApplication))).toList(),
         ),
     ],
   );
@@ -1155,6 +1155,7 @@ class _ActiveRideState extends State<ActiveRide> {
               options: MapOptions(
                 initialCenter: center,
                 initialZoom: 14.5,
+                onMapReady: () => mapReady = true,
               ),
               children: [
                 TileLayer(
@@ -1174,6 +1175,39 @@ class _ActiveRideState extends State<ActiveRide> {
                   ),
                 MarkerLayer(markers: markers),
               ],
+            ),
+            Positioned(
+              right: 12,
+              top: 105,
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'carrierRecenter',
+                      onPressed: () {
+                        if (mapReady) mapController.move(center, 15.5);
+                      },
+                      child: const Icon(Icons.my_location),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'carrierZoomIn',
+                      onPressed: () {
+                        if (mapReady) mapController.move(center, 16.5);
+                      },
+                      child: const Icon(Icons.add),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'carrierZoomOut',
+                      onPressed: () {
+                        if (mapReady) mapController.move(center, 13.5);
+                      },
+                      child: const Icon(Icons.remove),
+                    ),
+                  ],
+                ),
+              ),
             ),
             Positioned(
               top: 12,
@@ -1246,6 +1280,18 @@ class _ActiveRideState extends State<ActiveRide> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.grey),
                         ),
+                        if (navSteps.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Next: ' + (navSteps.first['instruction'] ?? '').toString() +
+                                ((navSteps.first['road'] ?? '').toString().isNotEmpty
+                                    ? ' • ' + (navSteps.first['road'] ?? '').toString()
+                                    : ''),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: purple),
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,
