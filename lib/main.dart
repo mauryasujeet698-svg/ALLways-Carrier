@@ -515,9 +515,13 @@ class _CarrierShellState extends State<CarrierShell>{
   }
 
   Future<void> _complete(DocumentReference ref)async{
-    await ref.update({'status':'completed','completedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
-    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'status':'online','availableForRides':true,'activeRideId':null,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-    if(mounted)setState(()=>activeRideId=null);
+    try{
+      final callable=FirebaseFunctions.instance.httpsCallable('completeRide');
+      await callable.call({'rideId':ref.id});
+      if(mounted){setState(()=>activeRideId=null);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride completed.')));}
+    }on FirebaseFunctionsException catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not complete ride.')));
+    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}
   }
   Future<void> _call(String phone)async{final p=phone.replaceAll(RegExp(r'[^0-9+]'),'');if(p.isNotEmpty)await launchUrl(Uri(scheme:'tel',path:p),mode:LaunchMode.externalApplication);}
   Future<void> _sos()async{await FirebaseFirestore.instance.collection('sosAlerts').add({'uid':widget.user.uid,'role':'carrier','createdAt':FieldValue.serverTimestamp(),'status':'open'});if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('SOS alert sent to ALLways operations.')));}
