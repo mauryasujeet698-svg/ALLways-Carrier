@@ -557,6 +557,7 @@ class _CarrierShellState extends State<CarrierShell>{
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       CarrierEarnings(user:widget.user),
+      CarrierRideHistory(user:widget.user),
       CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>CarrierSupportScreen(user:widget.user))),),
       CarrierVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
@@ -569,6 +570,7 @@ class _CarrierShellState extends State<CarrierShell>{
           NavigationDestination(icon:Icon(Icons.near_me_outlined),selectedIcon:Icon(Icons.near_me),label:'Requests'),
           NavigationDestination(icon:Icon(Icons.navigation_outlined),selectedIcon:Icon(Icons.navigation),label:'Active Ride'),
           NavigationDestination(icon:Icon(Icons.currency_rupee_outlined),selectedIcon:Icon(Icons.currency_rupee),label:'Earnings'),
+          NavigationDestination(icon:Icon(Icons.history_outlined),selectedIcon:Icon(Icons.history),label:'History'),
           NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'Profile'),
           NavigationDestination(icon:Icon(Icons.directions_car_outlined),selectedIcon:Icon(Icons.directions_car),label:'Vehicle'),
         ],
@@ -1399,4 +1401,22 @@ class CarrierProfile extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
+}
+
+class CarrierRideHistory extends StatelessWidget{
+  final User user; const CarrierRideHistory({super.key,required this.user});
+  @override Widget build(BuildContext context)=>Scaffold(
+    appBar:AppBar(title:const Text('Ride History')),
+    body:StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
+      stream:FirebaseFirestore.instance.collection('autoRideRequests').where('driverUid',isEqualTo:user.uid).snapshots(),
+      builder:(c,s){if(!s.hasData)return const Center(child:CircularProgressIndicator());final docs=s.data!.docs.toList();
+        docs.sort((a,b){final at=a.data()['completedAt'];final bt=b.data()['completedAt'];final am=at is Timestamp?at.millisecondsSinceEpoch:0;final bm=bt is Timestamp?bt.millisecondsSinceEpoch:0;return bm.compareTo(am);});
+        if(docs.isEmpty)return const Center(child:Text('No completed rides yet.'));
+        return ListView.builder(padding:const EdgeInsets.all(16),itemCount:docs.length,itemBuilder:(_,i){final x=docs[i].data();return Card(child:ListTile(
+          leading:const CircleAvatar(child:Icon(Icons.route)),title:Text((x['destinationAddress']??'Ride').toString(),maxLines:1,overflow:TextOverflow.ellipsis),
+          subtitle:Text((x['pickupAddress']??'Pickup').toString()+' • '+(x['status']??'').toString()),
+          trailing:Text('₹'+(x['carrierEarning']??x['estimatedFare']??x['fare']??0).toString(),style:const TextStyle(fontWeight:FontWeight.w900))));});
+      }
+    )
+  );
 }
