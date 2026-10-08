@@ -19,7 +19,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'update_service.dart';
 import 'support_screen.dart';
 
-const purple=Color(0xFF5B1ACF);
+const driverTeal=Color(0xFF0B6E69);
 const ivory=Color(0xFFF8F6F0);
 const _mapboxPublicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
 const _mapboxTilesUrl = 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=' + _mapboxPublicToken;
@@ -31,17 +31,17 @@ Future<void> main() async {
   await Firebase.initializeApp();
   await GoogleSignIn.instance.initialize();
   FirebaseMessaging.onBackgroundMessage(_background);
-  runApp(const AllwaysCarrierApp());
+  runApp(const AllwaysDriverPartnerApp());
 }
 
-class AllwaysCarrierApp extends StatelessWidget {
-  const AllwaysCarrierApp({super.key});
+class AllwaysDriverPartnerApp extends StatelessWidget {
+  const AllwaysDriverPartnerApp({super.key});
   @override Widget build(BuildContext context)=>MaterialApp(
     debugShowCheckedModeBanner:false,
-    title:'ALLways Carrier',
+    title:'ALLways Driver Partner',
     theme:ThemeData(
       useMaterial3:true,
-      colorScheme:ColorScheme.fromSeed(seedColor:purple),
+      colorScheme:ColorScheme.fromSeed(seedColor:driverTeal),
       scaffoldBackgroundColor:ivory,
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
@@ -110,9 +110,9 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
     body:SafeArea(child:Center(child:SingleChildScrollView(padding:const EdgeInsets.all(24),child:ConstrainedBox(
       constraints:const BoxConstraints(maxWidth:440),
       child:Card(child:Padding(padding:const EdgeInsets.all(24),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        const CircleAvatar(radius:30,backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.two_wheeler,color:purple,size:34)),
-        const SizedBox(height:18),const Text('ALLways Carrier',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900)),
-        const SizedBox(height:4),const Text('Ride partner workspace'),
+        const CircleAvatar(radius:30,backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.two_wheeler,color:driverTeal,size:34)),
+        const SizedBox(height:18),const Text('ALLways Driver Partner',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900)),
+        const SizedBox(height:4),const Text('Driver Partner workspace'),
         if(widget.message!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(widget.message!,style:const TextStyle(color:Colors.red))),
         if(error!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(error!,style:const TextStyle(color:Colors.red))),
         const SizedBox(height:20),
@@ -120,7 +120,7 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
         const SizedBox(height:12),
         TextField(controller:password,obscureText:obscure,decoration:InputDecoration(labelText:'Password',prefixIcon:const Icon(Icons.lock_outline),suffixIcon:IconButton(onPressed:()=>setState(()=>obscure=!obscure),icon:Icon(obscure?Icons.visibility_outlined:Icons.visibility_off_outlined)))),
         const SizedBox(height:18),
-        SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:busy?null:login,style:FilledButton.styleFrom(backgroundColor:purple),child:busy?const CircularProgressIndicator(color:Colors.white):const Text('Sign in'))),
+        SizedBox(width:double.infinity,height:52,child:FilledButton(onPressed:busy?null:login,style:FilledButton.styleFrom(backgroundColor:driverTeal),child:busy?const CircularProgressIndicator(color:Colors.white):const Text('Sign in'))),
         const Padding(
           padding: EdgeInsets.symmetric(vertical: 16),
           child: Row(children: [
@@ -247,7 +247,7 @@ class _PartnerRegistrationPageState extends State<PartnerRegistrationPage> {
             height: 52,
             child: FilledButton(
               onPressed: busy ? null : submit,
-              style: FilledButton.styleFrom(backgroundColor: purple),
+              style: FilledButton.styleFrom(backgroundColor: driverTeal),
               child: busy
                   ? const CircularProgressIndicator(color: Colors.white)
                   : const Text('Submit for approval'),
@@ -285,7 +285,7 @@ class PendingApprovalPage extends StatelessWidget {
                   Icon(
                     rejected ? Icons.cancel_outlined : Icons.hourglass_top,
                     size: 58,
-                    color: rejected ? Colors.red : purple,
+                    color: rejected ? Colors.red : driverTeal,
                   ),
                   const SizedBox(height: 16),
                   Text(
@@ -654,7 +654,7 @@ class CarrierHome extends StatelessWidget {
       bottomItems.add(
         Card(
           child: ListTile(
-            leading: const Icon(Icons.navigation, color: purple),
+            leading: const Icon(Icons.navigation, color: driverTeal),
             title: const Text(
               'Active ride',
               style: TextStyle(fontWeight: FontWeight.w900),
@@ -667,7 +667,7 @@ class CarrierHome extends StatelessWidget {
     }
 
     if (online) {
-      bottomItems.insert(0,Card(elevation:0,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[const CircleAvatar(backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.bolt,color:purple)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Next action',style:TextStyle(fontWeight:FontWeight.w900)),Text('Open Requests → Accept → Navigate → Complete',style:TextStyle(color:Colors.grey,fontSize:12))]))]))));
+      bottomItems.insert(0,Card(elevation:0,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[const CircleAvatar(backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.bolt,color:driverTeal)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Next action',style:TextStyle(fontWeight:FontWeight.w900)),Text('Open Requests → Accept → Navigate → Complete',style:TextStyle(color:Colors.grey,fontSize:12))]))]))));
       bottomItems.add(
         const Padding(
           padding: EdgeInsets.only(top: 2),
@@ -700,7 +700,7 @@ class CarrierHome extends StatelessWidget {
                       height: 64,
                       child: Container(
                         decoration: BoxDecoration(
-                          color: purple,
+                          color: driverTeal,
                           shape: BoxShape.circle,
                           border: Border.all(color: Colors.white, width: 4),
                           boxShadow: const [
@@ -731,7 +731,7 @@ class CarrierHome extends StatelessWidget {
                     children: [
                       const CircleAvatar(
                         backgroundColor: Color(0x1A5B1ACF),
-                        child: Icon(Icons.two_wheeler, color: purple),
+                        child: Icon(Icons.two_wheeler, color: driverTeal),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -794,7 +794,7 @@ class CarrierHome extends StatelessWidget {
                     height: 64,
                     child: Container(
                       decoration: BoxDecoration(
-                        color: purple,
+                        color: driverTeal,
                         shape: BoxShape.circle,
                         border: Border.all(color: Colors.white, width: 4),
                       ),
@@ -822,7 +822,7 @@ class CarrierHome extends StatelessWidget {
                   children: [
                     const CircleAvatar(
                       backgroundColor: Color(0x1A5B1ACF),
-                      child: Icon(Icons.two_wheeler, color: purple),
+                      child: Icon(Icons.two_wheeler, color: driverTeal),
                     ),
                     const SizedBox(width: 10),
                     const Expanded(
@@ -896,10 +896,10 @@ class RideRequests extends StatelessWidget{
         const Text('Ride Requests',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
         ...list.map((d){final x=d.data();final lat=n(x['pickupLatitude']??x['pickupLat']);final lng=n(x['pickupLongitude']??x['pickupLng']);final km=Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)/1000;
           return Card(margin:const EdgeInsets.only(bottom:12),child:Padding(padding:const EdgeInsets.all(15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Row(children:[CircleAvatar(backgroundColor:purple.withOpacity(.1),child:Icon((x['rideType']??'bike').toString()=='auto'?Icons.local_taxi_outlined:Icons.two_wheeler,color:purple)),const SizedBox(width:10),Expanded(child:Text((x['rideType']??'bike').toString().toUpperCase()+' RIDE',style:const TextStyle(fontWeight:FontWeight.w900))),Text(km.toStringAsFixed(1)+' km',style:const TextStyle(color:purple,fontWeight:FontWeight.w800))]),
+            Row(children:[CircleAvatar(backgroundColor:driverTeal.withOpacity(.1),child:Icon((x['rideType']??'bike').toString()=='auto'?Icons.local_taxi_outlined:Icons.two_wheeler,color:driverTeal)),const SizedBox(width:10),Expanded(child:Text((x['rideType']??'bike').toString().toUpperCase()+' RIDE',style:const TextStyle(fontWeight:FontWeight.w900))),Text(km.toStringAsFixed(1)+' km',style:const TextStyle(color:driverTeal,fontWeight:FontWeight.w800))]),
             const SizedBox(height:10),Text((x['pickupAddress']??x['address']??'Pickup location').toString(),maxLines:2,overflow:TextOverflow.ellipsis),Text((x['destinationAddress']??x['destination']??'Destination').toString(),style:const TextStyle(color:Colors.grey),maxLines:2,overflow:TextOverflow.ellipsis),const SizedBox(height:8),
             Text('₹'+n(x['estimatedFare']??x['fare']??x['total']).toStringAsFixed(0),style:const TextStyle(fontSize:18,fontWeight:FontWeight.w900)),
-            const SizedBox(height:10),Row(children:[Expanded(child:OutlinedButton(onPressed:()=>onReject(d.reference),child:const Text('Reject'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>onAccept(d),style:FilledButton.styleFrom(backgroundColor:purple),child:const Text('Accept')))]),
+            const SizedBox(height:10),Row(children:[Expanded(child:OutlinedButton(onPressed:()=>onReject(d.reference),child:const Text('Reject'))),const SizedBox(width:8),Expanded(child:FilledButton(onPressed:()=>onAccept(d),style:FilledButton.styleFrom(backgroundColor:driverTeal),child:const Text('Accept')))]),
           ])));
         }),
       ]);
@@ -955,6 +955,8 @@ class _ActiveRideState extends State<ActiveRide> {
   final MapController mapController = MapController();
   bool mapReady = false;
   DateTime? lastCameraMove;
+  LatLng? lastRouteStart;
+  LatLng? lastRouteTarget;
   List<Map<String,dynamic>> navSteps = [];
   int activeStep = 0;
 
@@ -1042,15 +1044,23 @@ class _ActiveRideState extends State<ActiveRide> {
           data['destinationLongitude'] ?? data['destLng'],
         );
         final driver = point(data['driverLat'], data['driverLng']);
-        final customer = point(
-          data['customerLat'] ?? data['pickupLatitude'],
-          data['customerLng'] ?? data['pickupLongitude'],
-        );
-
-        if (!routeLoading && driver != null && customer != null && (route.isEmpty || (data['status']??'accepted').toString().toLowerCase() == 'accepted' || (data['status']??'accepted').toString().toLowerCase() == 'started')) {
+        final customer = point(data['customerLat'], data['customerLng']);
+        final status = (data['status'] ?? 'accepted').toString().toLowerCase();
+        final navigationTarget = status == 'started' ? (destination ?? customer) : (customer ?? pickup);
+        final lastDriver = lastRouteStart;
+        final lastTarget = lastRouteTarget;
+        final shouldRoute = driver != null && navigationTarget != null && !routeLoading &&
+            (lastDriver == null || lastTarget == null ||
+             const Distance().as(LengthUnit.Meter, lastDriver, driver) >= 100 ||
+             const Distance().as(LengthUnit.Meter, lastTarget, navigationTarget) >= 75 ||
+             route.isEmpty);
+        if (shouldRoute) {
           routeLoading = true;
-          final target = (data['status']??'accepted').toString().toLowerCase() == 'started' ? (destination ?? customer) : customer;
-          loadRoute(driver, target);
+          loadRoute(driver, navigationTarget).whenComplete(() {
+            if (mounted) setState(() => routeLoading = false);
+          });
+          lastRouteStart = driver;
+          lastRouteTarget = navigationTarget;
         }
 
         final center =
@@ -1062,7 +1072,7 @@ class _ActiveRideState extends State<ActiveRide> {
               point: driver,
               width: 62,
               height: 62,
-              child: const Pin(color: purple, icon: Icons.two_wheeler),
+              child: const Pin(color: driverTeal, icon: Icons.two_wheeler),
             ),
           if (customer != null)
             Marker(
@@ -1089,7 +1099,6 @@ class _ActiveRideState extends State<ActiveRide> {
 
         final phone =
             (data['customerPhone'] ?? data['phone'] ?? '').toString();
-        final status = (data['status'] ?? 'accepted').toString();
         final pickupAddress =
             (data['pickupAddress'] ?? 'Pickup').toString();
         final destinationAddress =
@@ -1113,7 +1122,7 @@ class _ActiveRideState extends State<ActiveRide> {
                     polylines: [
                       Polyline(
                         points: route,
-                        color: purple,
+                        color: driverTeal,
                         strokeWidth: 5,
                       ),
                     ],
@@ -1200,7 +1209,7 @@ class _ActiveRideState extends State<ActiveRide> {
                                 ? () => widget.onComplete(snapshot.data!.reference)
                                 : () => widget.onStart(snapshot.data!.reference),
                             style: FilledButton.styleFrom(
-                              backgroundColor: status.toLowerCase() == 'started' ? Colors.green : purple,
+                              backgroundColor: status.toLowerCase() == 'started' ? Colors.green : driverTeal,
                             ),
                             child: Text(status.toLowerCase() == 'started' ? 'Complete ride' : 'Start ride'),
                           ),
@@ -1224,7 +1233,7 @@ class CarrierEarnings extends StatelessWidget{
   @override Widget build(BuildContext c)=>StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
     stream:FirebaseFirestore.instance.collection('autoRideRequests').where('driverUid',isEqualTo:user.uid).snapshots(),
     builder:(context,s){num earned=0;int done=0;num ratingSum=0;int ratings=0;for(final d in s.data?.docs??const <QueryDocumentSnapshot<Map<String,dynamic>>>[]){final x=d.data();final st=(x['status']??'').toString().toLowerCase();if(st=='completed'){done++;earned+=n(x['driverEarning']??x['partnerEarning']);}final r=x['rating'];if(r is num){ratingSum+=r;ratings++;}}final avg=ratings==0?0:ratingSum/ratings;
-      return ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[const Text('Earnings & Ratings',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),Row(children:[Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.currency_rupee,color:purple),const SizedBox(height:8),Text('₹'+earned.toStringAsFixed(0),style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const Text('Recorded earnings',style:TextStyle(color:Colors.grey))])))),const SizedBox(width:10),Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.star,color:Colors.amber),const SizedBox(height:8),Text(avg.toStringAsFixed(1),style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),Text(ratings==0?'No ratings yet':ratings.toString()+' ratings',style:const TextStyle(color:Colors.grey))]))))]),const SizedBox(height:12),Card(child:ListTile(leading:const Icon(Icons.check_circle,color:Colors.green),title:Text(done.toString(),style:const TextStyle(fontSize:21,fontWeight:FontWeight.w900)),subtitle:const Text('Completed rides')))]);
+      return ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[const Text('Earnings & Ratings',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),Row(children:[Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.currency_rupee,color:driverTeal),const SizedBox(height:8),Text('₹'+earned.toStringAsFixed(0),style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const Text('Recorded earnings',style:TextStyle(color:Colors.grey))])))),const SizedBox(width:10),Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.star,color:Colors.amber),const SizedBox(height:8),Text(avg.toStringAsFixed(1),style:const TextStyle(fontSize:24,fontWeight:FontWeight.w900)),Text(ratings==0?'No ratings yet':ratings.toString()+' ratings',style:const TextStyle(color:Colors.grey))]))))]),const SizedBox(height:12),Card(child:ListTile(leading:const Icon(Icons.check_circle,color:Colors.green),title:Text(done.toString(),style:const TextStyle(fontSize:21,fontWeight:FontWeight.w900)),subtitle:const Text('Completed rides')))]);
     },
   );
 }
@@ -1280,7 +1289,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     const Text('Offer your vehicle and manage customer booking requests from one place.',style:TextStyle(color:Colors.grey)),
     const SizedBox(height:14),
     Card(child:ListTile(
-      leading:const Icon(Icons.event_available_outlined,color:purple),
+      leading:const Icon(Icons.event_available_outlined,color:driverTeal),
       title:const Text('List your vehicle for bookings',style:TextStyle(fontWeight:FontWeight.w900)),
       subtitle:const Text('Publish your vehicle so customers can book it.'),
       trailing:const Icon(Icons.chevron_right),
@@ -1288,7 +1297,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
     )),
     const SizedBox(height:8),
     Card(child:ListTile(
-      leading:const Icon(Icons.two_wheeler,color:purple),
+      leading:const Icon(Icons.two_wheeler,color:driverTeal),
       title:const Text('Your vehicle for riding',style:TextStyle(fontWeight:FontWeight.w900)),
       subtitle:const Text('Set the vehicle you use to accept ALLways rides.'),
       trailing:const Icon(Icons.chevron_right),
@@ -1393,9 +1402,9 @@ class CarrierProfile extends StatelessWidget{
   const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
-    Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
-    Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:purple),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
-    Card(child:ListTile(leading:const Icon(Icons.language,color:purple),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
+    Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
+    Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:driverTeal),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
+    Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
     Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
