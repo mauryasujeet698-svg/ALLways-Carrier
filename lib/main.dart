@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -1068,7 +1067,7 @@ class _ActiveRideState extends State<ActiveRide> {
         final center = driver ?? pickup ?? destination ?? const LatLng(25.4358, 81.8463);
         final cameraTarget = navigationTarget ?? pickup ?? destination;
         if(mapReady && cameraTarget != null){
-          final key='${cameraTarget.latitude.toStringAsFixed(5)},${cameraTarget.longitude.toStringAsFixed(5)}:${status}';
+          final key='${cameraTarget.latitude.toStringAsFixed(5)},${cameraTarget.longitude.toStringAsFixed(5)}:$status';
           if(cameraKey!=key){
             cameraKey=key;
             final from=driver ?? pickup ?? destination ?? center;
