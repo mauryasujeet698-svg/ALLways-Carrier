@@ -46,31 +46,31 @@ class AllwaysDriverPartnerApp extends StatelessWidget {
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
     ),
-    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-Carrier',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-carrier-latest.apk',child:AuthGate()),
+    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-DriverPartner',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-driver-partner-latest.apk',child:AuthGate()),
   );
 }
 
 class AuthGate extends StatelessWidget{
  const AuthGate({super.key});
  @override Widget build(BuildContext context)=>StreamBuilder<User?>(stream:FirebaseAuth.instance.authStateChanges(),builder:(context,s){
-  if(s.data==null)return const CarrierLoginPage();
+  if(s.data==null)return const DriverPartnerLoginPage();
   return FutureBuilder<DocumentSnapshot<Map<String,dynamic>>>(future:FirebaseFirestore.instance.collection('ridePartners').doc(s.data!.uid).get(),builder:(context,a){
    if(!a.hasData)return const Scaffold(body:Center(child:CircularProgressIndicator()));
    if(!a.data!.exists)return PartnerRegistrationPage(user:s.data!);
    final p=a.data!.data()??{};final approval=(p['approvalStatus']??'').toString().toLowerCase();
    if(approval=='pending')return PendingApprovalPage(user:s.data!,rejected:false);
    if(approval=='rejected')return PendingApprovalPage(user:s.data!,rejected:true,reason:(p['rejectionReason']??'').toString());
-   return CarrierShell(user:s.data!);
+   return DriverPartnerShell(user:s.data!);
   });
  });
 }
 
-class CarrierLoginPage extends StatefulWidget {
+class DriverPartnerLoginPage extends StatefulWidget {
   final String? message;
-  const CarrierLoginPage({super.key,this.message});
-  @override State<CarrierLoginPage> createState()=>_CarrierLoginPageState();
+  const DriverPartnerLoginPage({super.key,this.message});
+  @override State<DriverPartnerLoginPage> createState()=>_DriverPartnerLoginPageState();
 }
-class _CarrierLoginPageState extends State<CarrierLoginPage>{
+class _DriverPartnerLoginPageState extends State<DriverPartnerLoginPage>{
   final email=TextEditingController(),password=TextEditingController();
   bool busy=false,obscure=true;String? error;
   Future<void> login()async{
@@ -315,11 +315,11 @@ class PendingApprovalPage extends StatelessWidget {
   );
 }
 
-class CarrierShell extends StatefulWidget{
-  final User user;const CarrierShell({super.key,required this.user});
-  @override State<CarrierShell> createState()=>_CarrierShellState();
+class DriverPartnerShell extends StatefulWidget{
+  final User user;const DriverPartnerShell({super.key,required this.user});
+  @override State<DriverPartnerShell> createState()=>_DriverPartnerShellState();
 }
-class _CarrierShellState extends State<CarrierShell>{
+class _DriverPartnerShellState extends State<DriverPartnerShell>{
   int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;
   StreamSubscription<Position>? locationSub;
   StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
@@ -554,13 +554,13 @@ class _CarrierShellState extends State<CarrierShell>{
   }
   @override Widget build(BuildContext context){
     final pages=[
-      CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
+      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
-      CarrierEarnings(user:widget.user),
-      CarrierRideHistory(user:widget.user),
-      CarrierProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>CarrierSupportScreen(user:widget.user))),),
-      CarrierVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
+      DriverPartnerEarnings(user:widget.user),
+      DriverPartnerRideHistory(user:widget.user),
+      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
+      DriverPartnerVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
       body:SafeArea(child:IndexedStack(index:tab,children:pages)),
@@ -580,13 +580,13 @@ class _CarrierShellState extends State<CarrierShell>{
   }
 }
 
-class CarrierHome extends StatelessWidget {
+class DriverPartnerHome extends StatelessWidget {
   final bool online;
   final Position? position;
   final String? activeRideId;
   final Future<void> Function(bool) onOnline;
 
-  const CarrierHome({
+  const DriverPartnerHome({
     super.key,
     required this.online,
     required this.position,
@@ -1242,8 +1242,8 @@ class _ActiveRideState extends State<ActiveRide> {
   }
 }
 
-class CarrierEarnings extends StatelessWidget{
-  final User user;const CarrierEarnings({super.key,required this.user});
+class DriverPartnerEarnings extends StatelessWidget{
+  final User user;const DriverPartnerEarnings({super.key,required this.user});
   num n(dynamic v)=>v is num?v:num.tryParse((v??'').toString())??0;
   @override Widget build(BuildContext c)=>StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
     stream:FirebaseFirestore.instance.collection('autoRideRequests').where('driverUid',isEqualTo:user.uid).snapshots(),
@@ -1254,13 +1254,13 @@ class CarrierEarnings extends StatelessWidget{
 }
 
 
-class CarrierVehiclePage extends StatefulWidget{
+class DriverPartnerVehiclePage extends StatefulWidget{
   final User user;
   final Future<void> Function() onRideVehicle;
-  const CarrierVehiclePage({super.key,required this.user,required this.onRideVehicle});
-  @override State<CarrierVehiclePage> createState()=>_CarrierVehiclePageState();
+  const DriverPartnerVehiclePage({super.key,required this.user,required this.onRideVehicle});
+  @override State<DriverPartnerVehiclePage> createState()=>_DriverPartnerVehiclePageState();
 }
-class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
+class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
   final categories=['Motorcycle','Scooter','E-bike','Auto Rickshaw','E-Rickshaw','Hatchback','Sedan','SUV','MUV','Luxury Car','Taxi / Cab','Tempo Traveller','Van','Mini Bus','Bus','Pickup Truck','Mini Truck','Bolero Pickup','Goods Auto','Cargo Van','Tractor','Tractor Trolley','Trailer','Ambulance','Other'];
   Future<void> _listVehicle()async{
     final category=ValueNotifier('Motorcycle');final price=TextEditingController();final capacity=TextEditingController();final phone=TextEditingController();final city=TextEditingController();final pincode=TextEditingController();bool negotiate=true;
@@ -1412,9 +1412,9 @@ Future<void> _chooseAllwaysLanguage(BuildContext context) async {
   }
 }
 
-class CarrierProfile extends StatelessWidget{
+class DriverPartnerProfile extends StatelessWidget{
   final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
-  const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
+  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
@@ -1427,8 +1427,8 @@ class CarrierProfile extends StatelessWidget{
   ]);
 }
 
-class CarrierRideHistory extends StatelessWidget{
-  final User user; const CarrierRideHistory({super.key,required this.user});
+class DriverPartnerRideHistory extends StatelessWidget{
+  final User user; const DriverPartnerRideHistory({super.key,required this.user});
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Ride History')),
     body:StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
