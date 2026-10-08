@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -320,7 +321,7 @@ class CarrierShell extends StatefulWidget{
   @override State<CarrierShell> createState()=>_CarrierShellState();
 }
 class _CarrierShellState extends State<CarrierShell>{
-  int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;
+  int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;
   StreamSubscription<Position>? locationSub;
   StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
   @override void initState(){super.initState();_load();_notifications();}
@@ -333,6 +334,7 @@ class _CarrierShellState extends State<CarrierShell>{
       activeRideId=(x['activeRideId']??'').toString();if(activeRideId!.isEmpty)activeRideId=null;
       _watchActiveRide();
       vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
+      try{final rs=await FirebaseFirestore.instance.collection('settings').doc('ride').get();final v=double.tryParse((rs.data()?['matchingRadiusKm']??'7').toString())??7;if(v>0&&v<=50)matchingRadiusKm=v;}catch(_){}
       if(online) await _startLocation();
     }catch(_){}
     if(mounted)setState((){});
@@ -554,7 +556,7 @@ class _CarrierShellState extends State<CarrierShell>{
   @override Widget build(BuildContext context){
     final pages=[
       CarrierHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
-      RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,onAccept:_accept,onReject:_reject),
+      RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       CarrierEarnings(user:widget.user),
       CarrierRideHistory(user:widget.user),
@@ -866,8 +868,8 @@ class CarrierHome extends StatelessWidget {
 
 class RideRequests extends StatelessWidget{
   final User user;final bool online;final Position? position;final String vehicle;final String? activeRideId;
-  final Future<void> Function(QueryDocumentSnapshot<Map<String,dynamic>>) onAccept;final Future<void> Function(DocumentReference) onReject;
-  const RideRequests({super.key,required this.user,required this.online,required this.position,required this.vehicle,required this.activeRideId,required this.onAccept,required this.onReject});
+  final Future<void> Function(QueryDocumentSnapshot<Map<String,dynamic>>) onAccept;final Future<void> Function(DocumentReference) onReject;final double matchingRadiusKm;
+  const RideRequests({super.key,required this.user,required this.online,required this.position,required this.vehicle,required this.activeRideId,required this.matchingRadiusKm,required this.onAccept,required this.onReject});
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
   @override Widget build(BuildContext c)=>StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
     stream:FirebaseFirestore.instance.collection('autoRideRequests').where('status',isEqualTo:'searching').snapshots(),
@@ -889,9 +891,9 @@ class RideRequests extends StatelessWidget{
         if(rejected.contains(user.uid))continue;
         final type=(x['rideType']??'bike').toString().toLowerCase();if(type!=vehicle)continue;
         final lat=n(x['pickupLatitude']??x['pickupLat']);final lng=n(x['pickupLongitude']??x['pickupLng']);if(lat==0||lng==0)continue;
-        if(Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)<=25000)list.add(d);
+        if(Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)<=matchingRadiusKm*1000)list.add(d);
       }
-      if(list.isEmpty)return const Center(child:Padding(padding:EdgeInsets.all(28),child:Text('No ride requests within 25 km right now.',textAlign:TextAlign.center)));
+      if(list.isEmpty)return Center(child:Padding(padding:const EdgeInsets.all(28),child:Text('No ride requests within '+matchingRadiusKm.toStringAsFixed(0)+' km right now.',textAlign:TextAlign.center)));
       return ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
         const Text('Ride Requests',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
         ...list.map((d){final x=d.data();final lat=n(x['pickupLatitude']??x['pickupLat']);final lng=n(x['pickupLongitude']??x['pickupLng']);final km=Geolocator.distanceBetween(position!.latitude,position!.longitude,lat,lng)/1000;
@@ -959,7 +961,7 @@ class _ActiveRideState extends State<ActiveRide> {
   LatLng? lastRouteTarget;
   List<Map<String,dynamic>> navSteps = [];
   int activeStep = 0;
-
+  String? cameraKey;
   double number(dynamic value) {
     if (value is num) return value.toDouble();
     return double.tryParse((value ?? '').toString()) ?? 0;
@@ -1063,8 +1065,18 @@ class _ActiveRideState extends State<ActiveRide> {
           lastRouteTarget = navigationTarget;
         }
 
-        final center =
-            driver ?? pickup ?? destination ?? const LatLng(25.4358, 81.8463);
+        final center = driver ?? pickup ?? destination ?? const LatLng(25.4358, 81.8463);
+        final cameraTarget = navigationTarget ?? pickup ?? destination;
+        if(mapReady && cameraTarget != null){
+          final key='${cameraTarget.latitude.toStringAsFixed(5)},${cameraTarget.longitude.toStringAsFixed(5)}:${status}';
+          if(cameraKey!=key){
+            cameraKey=key;
+            final from=driver ?? pickup ?? destination ?? center;
+            final meters=Geolocator.distanceBetween(from.latitude,from.longitude,cameraTarget.latitude,cameraTarget.longitude);
+            final zoom=meters<1000?15.0:meters<3000?14.0:meters<7000?12.8:meters<15000?11.8:meters<30000?10.8:9.8;
+            WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)mapController.move(LatLng((from.latitude+cameraTarget.latitude)/2,(from.longitude+cameraTarget.longitude)/2),zoom);});
+          }
+        }
 
         final markers = <Marker>[
           if (driver != null)
@@ -1103,13 +1115,17 @@ class _ActiveRideState extends State<ActiveRide> {
             (data['pickupAddress'] ?? 'Pickup').toString();
         final destinationAddress =
             (data['destinationAddress'] ?? 'Destination').toString();
+        final locationUpdatedAt=data['customerLocationUpdatedAt'] ?? data['customerLocationUpdatedAt'];
+        final customerLocationFresh=locationUpdatedAt is Timestamp ? DateTime.now().difference(locationUpdatedAt.toDate()).inSeconds <= 60 : false;
 
         return Stack(
           children: [
             FlutterMap(
+              mapController: mapController,
               options: MapOptions(
                 initialCenter: center,
                 initialZoom: 14.5,
+                onMapReady: (){mapReady=true;},
               ),
               children: [
                 TileLayer(
@@ -1157,7 +1173,7 @@ class _ActiveRideState extends State<ActiveRide> {
                                 style: TextStyle(fontWeight: FontWeight.w900),
                               ),
                               Text(
-                                status + (customer != null && driver != null ? ' • Customer ' + (Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude) < 1000 ? Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude).round().toString() + ' m away' : (Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude) / 1000).toStringAsFixed(1) + ' km away') : ''),
+                                (customerLocationFresh ? 'Live • ' : 'Location may be stale • ') + status + (customer != null && driver != null ? ' • Customer ' + (Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude) < 1000 ? Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude).round().toString() + ' m away' : (Geolocator.distanceBetween(driver.latitude, driver.longitude, customer.latitude, customer.longitude) / 1000).toStringAsFixed(1) + ' km away') : ''),
                                 style: const TextStyle(
                                   color: Colors.grey,
                                   fontSize: 12,
