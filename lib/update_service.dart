@@ -21,7 +21,7 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
   String? url;
   String notes='';
   bool busy=false;
-  @override void initState(){super.initState();_check();_timer=Timer.periodic(const Duration(seconds:20),(_)=>_check(silent:true));}
+  @override void initState(){super.initState();_check();_timer=Timer.periodic(const Duration(minutes:10),(_)=>_check(silent:true));}
   @override void dispose(){_timer?.cancel();super.dispose();}
   List<int> _parts(String v)=>v.replaceFirst(RegExp(r'^[^0-9]*'),'').split('.').map((x)=>int.tryParse(RegExp(r'^\d+').stringMatch(x)??'0')??0).toList();
   bool _newer(String a,String b){final x=_parts(a),y=_parts(b);for(var i=0;i<3;i++){final aa=i<x.length?x[i]:0,bb=i<y.length?y[i]:0;if(aa!=bb)return aa>bb;}return false;}

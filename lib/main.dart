@@ -38,7 +38,7 @@ class AllwaysCarrierApp extends StatelessWidget {
   const AllwaysCarrierApp({super.key});
   @override Widget build(BuildContext context)=>MaterialApp(
     debugShowCheckedModeBanner:false,
-    title:'ALLways Carrier',
+    title:'ALLways Driver Partner',
     theme:ThemeData(
       useMaterial3:true,
       colorScheme:ColorScheme.fromSeed(seedColor:purple),
@@ -111,8 +111,8 @@ class _CarrierLoginPageState extends State<CarrierLoginPage>{
       constraints:const BoxConstraints(maxWidth:440),
       child:Card(child:Padding(padding:const EdgeInsets.all(24),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         const CircleAvatar(radius:30,backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.two_wheeler,color:purple,size:34)),
-        const SizedBox(height:18),const Text('ALLways Carrier',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900)),
-        const SizedBox(height:4),const Text('Ride partner workspace'),
+        const SizedBox(height:18),const Text('ALLways Driver Partner',style:TextStyle(fontSize:27,fontWeight:FontWeight.w900)),
+        const SizedBox(height:4),const Text('Driver partner workspace'),
         if(widget.message!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(widget.message!,style:const TextStyle(color:Colors.red))),
         if(error!=null)Padding(padding:const EdgeInsets.only(top:10),child:Text(error!,style:const TextStyle(color:Colors.red))),
         const SizedBox(height:20),
@@ -952,6 +952,8 @@ class ActiveRide extends StatefulWidget {
 class _ActiveRideState extends State<ActiveRide> {
   List<LatLng> route = [];
   bool routeLoading = false;
+  LatLng? lastRouteStart;
+  LatLng? lastRouteTarget;
   final MapController mapController = MapController();
   bool mapReady = false;
   DateTime? lastCameraMove;
@@ -1042,15 +1044,37 @@ class _ActiveRideState extends State<ActiveRide> {
           data['destinationLongitude'] ?? data['destLng'],
         );
         final driver = point(data['driverLat'], data['driverLng']);
-        final customer = point(
-          data['customerLat'] ?? data['pickupLatitude'],
-          data['customerLng'] ?? data['pickupLongitude'],
-        );
+        final customer = point(data['customerLat'], data['customerLng']);
+        final statusKey = (data['status'] ?? 'accepted').toString().toLowerCase();
+        final navigationTarget = statusKey == 'started'
+            ? (destination ?? customer)
+            : (customer ?? pickup);
 
-        if (!routeLoading && driver != null && customer != null && (route.isEmpty || (data['status']??'accepted').toString().toLowerCase() == 'accepted' || (data['status']??'accepted').toString().toLowerCase() == 'started')) {
-          routeLoading = true;
-          final target = (data['status']??'accepted').toString().toLowerCase() == 'started' ? (destination ?? customer) : customer;
-          loadRoute(driver, target);
+        if (!routeLoading && driver != null && navigationTarget != null) {
+          final movedEnough = lastRouteStart == null ||
+              Geolocator.distanceBetween(
+                    driver.latitude,
+                    driver.longitude,
+                    lastRouteStart!.latitude,
+                    lastRouteStart!.longitude,
+                  ) >=
+                  100;
+          final targetChanged = lastRouteTarget == null ||
+              Geolocator.distanceBetween(
+                    navigationTarget.latitude,
+                    navigationTarget.longitude,
+                    lastRouteTarget!.latitude,
+                    lastRouteTarget!.longitude,
+                  ) >=
+                  75;
+          if (route.isEmpty || movedEnough || targetChanged) {
+            routeLoading = true;
+            lastRouteStart = driver;
+            lastRouteTarget = navigationTarget;
+            loadRoute(driver, navigationTarget).whenComplete(() {
+              if (mounted) setState(() => routeLoading = false);
+            });
+          }
         }
 
         final center =
@@ -1392,8 +1416,8 @@ class CarrierProfile extends StatelessWidget{
   final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
   const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
-    const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
-    Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
+    const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
+    Card(child:ListTile(leading:const Icon(Icons.person_outline,color:purple),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:purple),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:purple),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
