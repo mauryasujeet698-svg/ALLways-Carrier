@@ -611,39 +611,7 @@ class CarrierHome extends StatelessWidget {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 10),
-              Container(
-                height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: ivory,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search),
-                    SizedBox(width: 10),
-                    Text(
-                      'Search pickup or destination',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Recent destinations',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 7),
-              const Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('Prayagraj Civil Lines')),
-                  Chip(label: Text('Railway Junction')),
-                  Chip(label: Text('Sangam')),
-                ],
-              ),
+              CarrierSearchHistory(),
             ],
           ),
         ),
@@ -864,6 +832,95 @@ class CarrierHome extends StatelessWidget {
   }
 }
 
+class CarrierSearchHistory extends StatefulWidget {
+  const CarrierSearchHistory({super.key});
+  @override State<CarrierSearchHistory> createState()=>_CarrierSearchHistoryState();
+}
+
+class _CarrierSearchHistoryState extends State<CarrierSearchHistory> {
+  static const _key='carrier_search_history_v1';
+  List<String> history=[];
+
+  @override void initState(){super.initState();_load();}
+
+  Future<void> _load() async {
+    final p=await SharedPreferences.getInstance();
+    final values=p.getStringList(_key)??[];
+    if(mounted)setState(()=>history=values.take(10).toList());
+  }
+
+  Future<void> _save(String value) async {
+    final v=value.trim();
+    if(v.isEmpty)return;
+    final next=[v,...history.where((x)=>x.toLowerCase()!=v.toLowerCase())].take(10).toList();
+    final p=await SharedPreferences.getInstance();
+    await p.setStringList(_key,next);
+    if(mounted)setState(()=>history=next);
+  }
+
+  Future<void> _search() async {
+    final controller=TextEditingController();
+    final selected=await showDialog<String>(
+      context:context,
+      builder:(d)=>AlertDialog(
+        title:const Text('Search pickup or destination'),
+        content:TextField(
+          controller:controller,
+          autofocus:true,
+          textInputAction:TextInputAction.search,
+          decoration:const InputDecoration(hintText:'Enter address or place'),
+          onSubmitted:(v)=>Navigator.pop(d,v.trim()),
+        ),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(d),child:const Text('Cancel')),
+          FilledButton(onPressed:()=>Navigator.pop(d,controller.text.trim()),child:const Text('Search')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if(selected==null||selected.trim().isEmpty)return;
+    await _save(selected);
+    if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Saved search: $selected')));
+  }
+
+  Future<void> _clear() async {
+    final p=await SharedPreferences.getInstance();
+    await p.remove(_key);
+    if(mounted)setState(()=>history=[]);
+  }
+
+  @override Widget build(BuildContext context)=>Column(
+    crossAxisAlignment:CrossAxisAlignment.start,
+    children:[
+      InkWell(
+        borderRadius:BorderRadius.circular(15),
+        onTap:_search,
+        child:Container(
+          height:50,
+          padding:const EdgeInsets.symmetric(horizontal:14),
+          decoration:BoxDecoration(color:ivory,borderRadius:BorderRadius.circular(15)),
+          child:const Row(children:[Icon(Icons.search),SizedBox(width:10),Text('Search pickup or destination',style:TextStyle(color:Colors.grey))]),
+        ),
+      ),
+      const SizedBox(height:12),
+      Row(
+        children:[
+          const Expanded(child:Text('Recent searches',style:TextStyle(fontWeight:FontWeight.w800))),
+          if(history.isNotEmpty)TextButton(onPressed:_clear,child:const Text('Clear')),
+        ],
+      ),
+      const SizedBox(height:7),
+      if(history.isEmpty)
+        const Text('No recent searches yet.',style:TextStyle(color:Colors.grey,fontSize:12))
+      else
+        Wrap(
+          spacing:8,runSpacing:8,
+          children:history.map((x)=>ActionChip(label:Text(x,maxLines:1,overflow:TextOverflow.ellipsis),onPressed:()=>launchUrl(Uri.parse('https://www.google.com/maps/search/?api=1&query='+Uri.encodeComponent(x)),mode:LaunchMode.externalApplication))).toList(),
+        ),
+    ],
+  );
+}
+
 class RideRequests extends StatelessWidget{
   final User user;final bool online;final Position? position;final String vehicle;final String? activeRideId;
   final Future<void> Function(QueryDocumentSnapshot<Map<String,dynamic>>) onAccept;final Future<void> Function(DocumentReference) onReject;
@@ -1069,7 +1126,7 @@ class _ActiveRideState extends State<ActiveRide> {
               point: customer,
               width: 58,
               height: 58,
-              child: const Pin(color: Colors.blue, icon: Icons.person),
+              child: const Pin(color: Colors.blue, icon: Icons.accessibility_new),
             ),
           if (pickup != null)
             Marker(
@@ -1101,6 +1158,7 @@ class _ActiveRideState extends State<ActiveRide> {
               options: MapOptions(
                 initialCenter: center,
                 initialZoom: 14.5,
+                onMapReady: () => mapReady = true,
               ),
               children: [
                 TileLayer(
@@ -1120,6 +1178,39 @@ class _ActiveRideState extends State<ActiveRide> {
                   ),
                 MarkerLayer(markers: markers),
               ],
+            ),
+            Positioned(
+              right: 12,
+              top: 105,
+              child: SafeArea(
+                child: Column(
+                  children: [
+                    FloatingActionButton.small(
+                      heroTag: 'carrierRecenter',
+                      onPressed: () {
+                        if (mapReady) mapController.move(center, 15.5);
+                      },
+                      child: const Icon(Icons.my_location),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'carrierZoomIn',
+                      onPressed: () {
+                        if (mapReady) mapController.move(center, 16.5);
+                      },
+                      child: const Icon(Icons.add),
+                    ),
+                    const SizedBox(height: 8),
+                    FloatingActionButton.small(
+                      heroTag: 'carrierZoomOut',
+                      onPressed: () {
+                        if (mapReady) mapController.move(center, 13.5);
+                      },
+                      child: const Icon(Icons.remove),
+                    ),
+                  ],
+                ),
+              ),
             ),
             Positioned(
               top: 12,
@@ -1192,6 +1283,18 @@ class _ActiveRideState extends State<ActiveRide> {
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(color: Colors.grey),
                         ),
+                        if (navSteps.isNotEmpty) ...[
+                          const SizedBox(height: 8),
+                          Text(
+                            'Next: ' + (navSteps.first['instruction'] ?? '').toString() +
+                                ((navSteps.first['road'] ?? '').toString().isNotEmpty
+                                    ? ' • ' + (navSteps.first['road'] ?? '').toString()
+                                    : ''),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontWeight: FontWeight.w800, color: purple),
+                          ),
+                        ],
                         const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,
