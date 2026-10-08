@@ -8,6 +8,6 @@ void main() {
       const MaterialApp(home: CarrierLoginPage()),
     );
     await tester.pump();
-    expect(find.text('ALLways Carrier'), findsOneWidget);
+    expect(find.text('ALLways Driver Partner'), findsOneWidget);
   });
 }
