@@ -101,6 +101,11 @@ jobs:
             </application>
           </manifest>
           """)
+          icon = Path("android/app/src/main/res/drawable/allways_driver_partner_icon.xml")
+          icon.parent.mkdir(parents=True, exist_ok=True)
+          icon.write_text("""<vector xmlns:android="http://schemas.android.com/apk/res/android" android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108"><path android:fillColor="#087F8C" android:pathData="M54,4A50,50 0,1 0,54 104A50,50 0,1 0,54 4"/><path android:fillColor="#FFFFFF" android:pathData="M54,24A30,30 0,1 0,54 84A30,30 0,1 0,54 24M54,32A22,22 0,1 1,54 76A22,22 0,1 1,54 32"/><path android:fillColor="#FFFFFF" android:pathData="M30,43L50,51L45,58L28,53Z"/><path android:fillColor="#FFFFFF" android:pathData="M78,43L58,51L63,58L80,53Z"/><path android:fillColor="#FFFFFF" android:pathData="M51,50H57V74H51Z"/><path android:fillColor="#FFFFFF" android:pathData="M47,69H61V75H47Z"/></vector>
+          """)
+          manifest.write_text(manifest.read_text().replace('android:icon="@mipmap/ic_launcher"','android:icon="@drawable/allways_driver_partner_icon"'))
           PY
 
           cat > android/app/src/main/kotlin/com/allways/carrier/MainActivity.kt <<'KOTLIN'
@@ -234,8 +239,8 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-carrier-v${{ env.APP_VERSION }}.apk"
-          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-carrier-latest.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-driver-partner-latest.apk"
 
       - name: Publish latest APK release
         uses: softprops/action-gh-release@v3
