@@ -1051,8 +1051,8 @@ class _ActiveRideState extends State<ActiveRide> {
         final lastTarget = lastRouteTarget;
         final shouldRoute = driver != null && navigationTarget != null && !routeLoading &&
             (lastDriver == null || lastTarget == null ||
-             const Distance().as(LengthUnit.Meter, lastDriver, driver) >= 100 ||
-             const Distance().as(LengthUnit.Meter, lastTarget, navigationTarget) >= 75 ||
+             Distance().as(LengthUnit.Meter, lastDriver, driver) >= 100 ||
+             Distance().as(LengthUnit.Meter, lastTarget, navigationTarget) >= 75 ||
              route.isEmpty);
         if (shouldRoute) {
           routeLoading = true;
