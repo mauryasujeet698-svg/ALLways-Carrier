@@ -476,7 +476,7 @@ class _CarrierShellState extends State<CarrierShell>{
         if(existingActive.isNotEmpty||partnerStatus=='on_trip')throw Exception('Complete your current ride before accepting another ride.');
         final requested=(x['rideType']??'bike').toString().toLowerCase();final mine=(profile['vehicleType']??vehicle).toString().toLowerCase();final normalized=mine=='two_wheeler'?'bike':mine;
         if(requested!=normalized)throw Exception('This ride is for a different vehicle type.');
-        tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Carrier','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
+        tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Driver Partner','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
         tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
       });
       if(mounted){setState(()=>activeRideId=doc.id);setState(()=>tab=2);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted. Opening live tracking.')));}
@@ -739,7 +739,7 @@ class CarrierHome extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const Text(
-                              'ALLways Carrier',
+                              'ALLways Driver Partner',
                               style: TextStyle(fontWeight: FontWeight.w900),
                             ),
                             const SizedBox(height: 2),
@@ -830,7 +830,7 @@ class CarrierHome extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'ALLways Carrier',
+                            'ALLways Driver Partner',
                             style: TextStyle(fontWeight: FontWeight.w900),
                           ),
                           SizedBox(height: 2),
@@ -1268,7 +1268,7 @@ class _CarrierVehiclePageState extends State<CarrierVehiclePage>{
       final cleanPrice=num.tryParse(price.text.trim())??0;
       if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
       await FirebaseFirestore.instance.collection('vehicles').add({
-        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Carrier','ownerPhone':cleanPhone,
+        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Driver Partner','ownerPhone':cleanPhone,
         'category':category.value,'vehicleType':category.value,'price':cleanPrice,'capacity':num.tryParse(capacity.text.trim())??0,
         'allowNegotiation':negotiate,'status':'available','listingStatus':'active','available':true,
         'manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
@@ -1401,8 +1401,8 @@ class CarrierProfile extends StatelessWidget{
   final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
   const CarrierProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
-    const Text('Carrier Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
-    Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Carrier'),subtitle:Text(user.email??''))),
+    const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
+    Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:driverTeal),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
