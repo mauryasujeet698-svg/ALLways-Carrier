@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -234,7 +234,7 @@ jobs:
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-carrier-v${APP_VERSION}.apk"
+          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-carrier-v${{ env.APP_VERSION }}.apk"
           cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-carrier-latest.apk"
 
       - name: Publish latest APK release
