@@ -1,5 +1,5 @@
-name: allways_carrier
-description: Dedicated ALLways Carrier Android application.
+name: allways_driver_partner
+description: Dedicated ALLways Driver Partner Android application.
 publish_to: "none"
 version: 1.0.4+5
 environment:
