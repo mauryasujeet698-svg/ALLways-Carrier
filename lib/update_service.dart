@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -19,6 +20,7 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
   Timer? _timer;
   String? version;
   String? url;
+  String? expectedSha256;
   String notes='';
   bool busy=false;
   @override void initState(){super.initState();_check();_timer=Timer.periodic(const Duration(minutes:10),(_)=>_check(silent:true));}
@@ -34,17 +36,30 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
       final d=jsonDecode(r.body);if(d is! Map)return;
       final name=(d['name']??'').toString();final m=RegExp(r'(\d+\.\d+\.\d+)').firstMatch(name);final remote=m?.group(1)??'';
       final assets=(d['assets'] is List)?(d['assets'] as List):const [];
-      String found='';for(final raw in assets){if(raw is Map&&(raw['name']??'').toString()==widget.assetName){found=(raw['browser_download_url']??'').toString();break;}}
-      if(remote.isNotEmpty&&found.isNotEmpty&&_newer(remote,info.version)&&mounted)setState(() { version=remote; url=found; notes=(d['body']??'').toString(); });
-    }catch(_){}
+      String found=''; String digest='';
+      for(final raw in assets){
+        if(raw is Map&&(raw['name']??'').toString()==widget.assetName){
+          found=(raw['browser_download_url']??'').toString();
+          final rawDigest=(raw['digest']??'').toString().toLowerCase().trim();
+          digest=rawDigest.startsWith('sha256:')?rawDigest.substring(7):rawDigest;
+          break;
+        }
+      }
+      if(remote.isNotEmpty&&found.isNotEmpty&&RegExp(r'^[a-f0-9]{64}$').hasMatch(digest)&&_newer(remote,info.version)&&mounted){
+        setState(() { version=remote; url=found; expectedSha256=digest; notes=(d['body']??'').toString(); });
+      }
+    }catch(_) {}
   }
   Future<void> _install()async{
-    final u=url;if(u==null||u.isEmpty||busy)return;
+    final u=url, expected=expectedSha256;
+    if(u==null||u.isEmpty||expected==null||expected.isEmpty||busy)return;
     setState(()=>busy=true);final p=ValueNotifier<double>(0);
     try{
       if(mounted)showDialog(context:context,barrierDismissible:false,builder:(_)=>AlertDialog(title:Text('Updating ALLways to ${version??''}'),content:ValueListenableBuilder<double>(valueListenable:p,builder:(_,v,__)=>Column(mainAxisSize:MainAxisSize.min,children:[LinearProgressIndicator(value:v>0?v:null),const SizedBox(height:12),Text(v>0?'Downloading ${(v*100).toStringAsFixed(0)}%':'Starting download…')]))));
       final file=File('${Directory.systemTemp.path}/allways_${DateTime.now().millisecondsSinceEpoch}.apk');
       await Dio().download(u+(u.contains('?')?'&':'?')+'cacheBust=${DateTime.now().millisecondsSinceEpoch}',file.path,deleteOnError:true,onReceiveProgress:(a,b){if(b>0)p.value=a/b;});
+      final actual=sha256.convert(await file.readAsBytes()).toString().toLowerCase();
+      if(actual!=expected)throw StateError('Downloaded update failed integrity verification.');
       if(mounted&&Navigator.of(context).canPop())Navigator.of(context).pop();
       final result=await MethodChannel(widget.packageChannel).invokeMethod<String>('installApk',{'path':file.path});
       if(result=='permission_required'){
@@ -53,49 +68,8 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
       }else if(result!='started'&&mounted){ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Could not start installation: ${result??'unknown error'}')));}
     }catch(e){if(mounted&&Navigator.of(context).canPop())Navigator.of(context).pop();if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Update failed: $e')));}finally{p.dispose();if(mounted)setState(()=>busy=false);}
   }
-  @override
-  Widget build(BuildContext context) {
+  @override Widget build(BuildContext context) {
     if (version == null) return widget.child;
-    return Stack(
-      children: [
-        widget.child,
-        Positioned(
-          top: 0,
-          left: 0,
-          right: 0,
-          child: Material(
-            elevation: 6,
-            color: Theme.of(context).colorScheme.primaryContainer,
-            child: SafeArea(
-              bottom: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
-                child: Row(
-                  children: [
-                    const Icon(Icons.system_update),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('New ALLways update available', style: TextStyle(fontWeight: FontWeight.w900)),
-                          Text(
-                            'Version $version is ready${notes.isNotEmpty ? ' • ' + notes.replaceAll(RegExp(r'\s+'), ' ').trim() : ''}',
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ),
-                    FilledButton(onPressed: busy ? null : _install, child: const Text('UPDATE')),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
+    return Stack(children:[widget.child,Positioned(top:0,left:0,right:0,child:Material(elevation:6,color:Theme.of(context).colorScheme.primaryContainer,child:SafeArea(bottom:false,child:Padding(padding:const EdgeInsets.fromLTRB(14,10,8,10),child:Row(children:[const Icon(Icons.system_update),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('New ALLways update available',style:TextStyle(fontWeight:FontWeight.w900)),Text('Version $version is ready${notes.isNotEmpty ? ' • ' + notes.replaceAll(RegExp(r'\\s+'),' ').trim() : ''}',maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12))])),FilledButton(onPressed:busy?null:_install,child:const Text('UPDATE'))])))))]);
   }
 }
