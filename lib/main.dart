@@ -46,7 +46,7 @@ class AllwaysDriverPartnerApp extends StatelessWidget {
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
     ),
-    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-DriverPartner',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-driver-partner-latest.apk',child:AuthGate()),
+    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-Carrier',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-driver-partner-latest.apk',child:AuthGate()),
   );
 }
 
