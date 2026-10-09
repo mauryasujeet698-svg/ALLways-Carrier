@@ -236,6 +236,19 @@ jobs:
           test -n "$VERSION"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      - name: Android runtime smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          cores: 4
+          disable-animations: true
+          script: |
+            adb install -r build/app/outputs/flutter-apk/app-release.apk
+            timeout 90s adb shell am start -S -W -n com.allways.carrier/.MainActivity
+            adb shell pidof com.allways.carrier
+
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
@@ -254,17 +267,3 @@ jobs:
             release-assets/allways-driver-partner-latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-      - name: Android runtime smoke test
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_2
-          cores: 4
-          disable-animations: true
-          script: |
-            adb install -r build/app/outputs/flutter-apk/app-release.apk
-            timeout 90s adb shell am start -S -W -n com.allways.carrier/.MainActivity
-            adb shell pidof com.allways.carrier
