@@ -1,0 +1,58 @@
+name: ALLways Driver Partner QA Build
+
+on:
+  push:
+    branches: [audit-implementation-2026-10]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: allways-driver-partner-qa-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout approved feature branch
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Unit and widget tests
+        run: flutter test
+
+      - name: Generate Android project scaffolding for QA build
+        run: flutter create --platforms=android --org com.allways --project-name driver-partner .
+
+      - name: Build QA debug APK (no release signing)
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Check APK exists and report size
+        shell: bash
+        run: |
+          APK="build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK"
+          ls -lh "$APK"
+          sha256sum "$APK"
+
+      - name: Upload QA APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: allways-driver-partner-qa-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
