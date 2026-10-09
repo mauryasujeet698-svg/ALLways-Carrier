@@ -993,7 +993,7 @@ class _ActiveRideState extends State<ActiveRide> {
   LatLng? point(dynamic latitude, dynamic longitude) {
     final lat = number(latitude);
     final lng = number(longitude);
-    if (lat == 0 || lng == 0) return null;
+    if (lat == 0 || lng == 0 || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
     return LatLng(lat, lng);
   }
 
@@ -1525,7 +1525,8 @@ class DriverPartnerRideHistory extends StatelessWidget{
       builder:(c,s){
         if(s.hasError)return Center(child:Padding(padding:const EdgeInsets.all(20),child:Text('Could not load ride history: ${s.error}')));
         if(!s.hasData)return const Center(child:CircularProgressIndicator());
-        final docs=s.data!.docs.where((d)=>_recent(d.data())).toList();
+        const terminal={'completed','cancelled','canceled','rejected','expired','failed'};
+        final docs=s.data!.docs.where((d)=>terminal.contains((d.data()['status']??'').toString().toLowerCase())&&_recent(d.data())).toList();
         docs.sort((a,b)=>(_event(b.data())??DateTime.fromMillisecondsSinceEpoch(0)).compareTo(_event(a.data())??DateTime.fromMillisecondsSinceEpoch(0)));
         if(docs.isEmpty)return const Center(child:Padding(padding:EdgeInsets.all(24),child:Text('No ride history for today or the preceding six calendar days.',textAlign:TextAlign.center)));
         return ListView.builder(padding:const EdgeInsets.all(16),itemCount:docs.length,itemBuilder:(_,i){
