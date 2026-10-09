@@ -502,7 +502,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         'verifyConfirmationPin',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
       );
-      await callable.call({'type':'ride','id':ref.id,'pin':pin});
+      await callable.call({'type':'ride','id':ref.id,'rideId':ref.id,'pin':pin});
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PIN verified. Ride started.')));
     }on FirebaseFunctionsException catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not verify the confirmation number.')));
