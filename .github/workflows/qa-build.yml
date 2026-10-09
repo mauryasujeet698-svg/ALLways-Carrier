@@ -36,7 +36,7 @@ jobs:
         run: flutter test
 
       - name: Generate Android project scaffolding for QA build
-        run: flutter create --platforms=android --org com.allways --project-name driver-partner .
+        run: flutter create --platforms=android --org com.allways --project-name driver_partner .
 
       - name: Build QA debug APK (no release signing)
         run: flutter build apk --debug --target-platform android-arm64
