@@ -2,12 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-class CarrierSupportScreen extends StatefulWidget {
+class DriverPartnerSupportScreen extends StatefulWidget {
   final User user;
-  const CarrierSupportScreen({super.key,required this.user});
-  @override State<CarrierSupportScreen> createState()=>_CarrierSupportScreenState();
+  const DriverPartnerSupportScreen({super.key,required this.user});
+  @override State<DriverPartnerSupportScreen> createState()=>_DriverPartnerSupportScreenState();
 }
-class _CarrierSupportScreenState extends State<CarrierSupportScreen>{
+class _DriverPartnerSupportScreenState extends State<DriverPartnerSupportScreen>{
   String area='Ride';
   final message=TextEditingController();
   String category='Ride issue';
