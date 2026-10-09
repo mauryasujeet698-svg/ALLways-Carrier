@@ -1,7 +1,7 @@
 name: allways_driver_partner
 description: Dedicated ALLways Driver Partner Android application.
 publish_to: "none"
-version: 1.0.4+5
+version: 1.0.5+6
 environment:
   sdk: ">=3.6.0 <4.0.0"
 dependencies:
