@@ -18,7 +18,7 @@ class _DriverPartnerSupportScreenState extends State<DriverPartnerSupportScreen>
     setState(()=>busy=true);
     try{
       await FirebaseFirestore.instance.collection('supportTickets').add({
-        'requesterId':widget.user.uid,'requesterRole':'carrier','requesterName':widget.user.displayName??widget.user.email??'Carrier',
+        'requesterId':widget.user.uid,'requesterRole':'carrier','requesterName':widget.user.displayName??widget.user.email??'ALLways Driver Partner',
         'queue':'Service Support','area':area,'category':category,'subcategory':category,'subject':category,
         'message':message.text.trim(),'priority':'normal','status':'open',
         'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp(),
