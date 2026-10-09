@@ -98,7 +98,6 @@ class MainActivity : FlutterActivity() {
         if (path.isNullOrBlank()) { result.error("NO_APK", "APK path is missing", null); return }
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
-                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
                 result.success("permission_required"); return
             }
             val apk = File(path)
