@@ -36,7 +36,10 @@ jobs:
         run: flutter test
 
       - name: Generate Android project scaffolding for QA build
-        run: flutter create --platforms=android --org com.allways --project-name driver_partner .
+        run: flutter create --platforms=android --org com.allways --project-name carrier .
+
+      - name: Configure native updater installer
+        run: python3 tool/configure_android_updater.py
 
       - name: Build QA debug APK (no release signing)
         run: flutter build apk --debug --target-platform android-arm64
