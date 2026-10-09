@@ -490,7 +490,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         context:context,
         builder:(dialogContext)=>AlertDialog(
           title:const Text('Passenger confirmation'),
-          content:TextField(controller:pinController,autofocus:true,keyboardType:TextInputType.number,maxLength:4,decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN')),
+          content:TextField(controller:pinController,autofocus:true,keyboardType:TextInputType.number,maxLength:4,inputFormatters:[FilteringTextInputFormatter.digitsOnly],decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN')),
           actions:[
             TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
             FilledButton(onPressed:()=>Navigator.pop(dialogContext,pinController.text.trim()),child:const Text('Start ride')),
