@@ -33,7 +33,7 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
   }
   @override void dispose(){_timer?.cancel();super.dispose();}
 
-  List<int> _parts(String v)=>v.replaceFirst(RegExp(r'^[^0-9]*'),'').split('.').map((x)=>int.tryParse(RegExp(r'^\\d+').stringMatch(x)??'0')??0).toList();
+  List<int> _parts(String v)=>v.replaceFirst(RegExp(r'^[^0-9]*'),'').split('.').map((x)=>int.tryParse(RegExp(r'^\d+').stringMatch(x)??'0')??0).toList();
   bool _newer(String a,String b){
     final x=_parts(a),y=_parts(b);
     for(var i=0;i<3;i++){final aa=i<x.length?x[i]:0,bb=i<y.length?y[i]:0;if(aa!=bb)return aa>bb;}
@@ -59,7 +59,7 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
       final decoded=jsonDecode(r.body);
       if(decoded is! Map)throw StateError('The release response was invalid.');
       final releaseName=(decoded['name']??'').toString();
-      final match=RegExp(r'(\\d+\\.\\d+\\.\\d+)').firstMatch(releaseName);
+      final match=RegExp(r'(\d+\.\d+\.\d+)').firstMatch(releaseName);
       final remoteVersion=match?.group(1)??'';
       if(remoteVersion.isEmpty)throw StateError('The latest release has no readable version number.');
       final assets=decoded['assets'] is List ? decoded['assets'] as List : const [];
@@ -188,7 +188,7 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
                           children:[
                             const Text('New ALLways update available',style:TextStyle(fontWeight:FontWeight.w900)),
                             Text(
-                              'Version ${version} is ready${notes.isNotEmpty?' • '+notes.replaceAll(RegExp(r'\\s+'),' ').trim():''}',
+                              'Version ${version} is ready${notes.isNotEmpty?' • '+notes.replaceAll(RegExp(r'\s+'),' ').trim():''}',
                               maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12),
                             ),
                           ],
