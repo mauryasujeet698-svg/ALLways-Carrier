@@ -3,14 +3,20 @@ from pathlib import Path
 manifest = Path("android/app/src/main/AndroidManifest.xml")
 text = manifest.read_text()
 if "android.permission.REQUEST_INSTALL_PACKAGES" not in text:
+    # Flutter's generated manifest may not include POST_NOTIFICATIONS, so do not
+    # depend on replacing that permission line.
     text = text.replace(
-        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
-        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n            <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
+        "<application",
+        '    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n            <application',
+        1,
     )
 if 'MainActivity$InstallStatusReceiver' not in text:
+    # The Firebase channel metadata is not guaranteed to exist in a freshly
+    # generated Android project. The receiver must always be registered.
     text = text.replace(
-        '<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="allways_urgent_v2"/>',
-        '<receiver android:name=".MainActivity$InstallStatusReceiver" android:exported="false"/>\n              <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="allways_urgent_v2"/>'
+        "</application>",
+        '    <receiver android:name=".MainActivity$InstallStatusReceiver" android:exported="false"/>\n            </application>',
+        1,
     )
 manifest.write_text(text)
 
