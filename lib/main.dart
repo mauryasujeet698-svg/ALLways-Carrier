@@ -366,7 +366,10 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       final p=await SharedPreferences.getInstance();
       if(p.getBool('notifications_enabled')==false)return;
       final s=await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
-      if(s.authorizationStatus==AuthorizationStatus.denied)return;
+      if(s.authorizationStatus==AuthorizationStatus.denied){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Notifications are blocked by Android. Enable ALLways notifications in system settings, then reopen this app.')));
+        return;
+      }
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(alert:true,badge:true,sound:true);
       await FirebaseMessaging.instance.subscribeToTopic('all_users');
       await FirebaseMessaging.instance.subscribeToTopic('carriers');
@@ -407,16 +410,23 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         ));
       });
       Future<void> openRideFromMessage(RemoteMessage message) async {
-        final rideId=(message.data['rideId']??'').toString().trim();
+        final rideId=(message.data['rideId']??message.data['id']??'').toString().trim();
         if(rideId.isEmpty)return;
         final ride=await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
-        if(!ride.exists || (ride.data()?['driverUid']??'').toString()!=widget.user.uid)return;
-        if(mounted)setState((){activeRideId=rideId;tab=2;});
+        if(!ride.exists)return;
+        final data=ride.data()??{};
+        final status=(data['status']??'').toString().toLowerCase();
+        if(const {'cancelled','completed','rejected','expired'}.contains(status))return;
+        final assigned=(data['driverUid']??'').toString()==widget.user.uid;
+        if(mounted&&assigned){setState((){activeRideId=rideId;tab=2;});return;}
+        if(mounted&&status=='searching'&&(data['driverUid']??'').toString().isEmpty){setState(()=>tab=1);}
       }
       FirebaseMessaging.onMessageOpenedApp.listen(openRideFromMessage);
       final initialMessage=await FirebaseMessaging.instance.getInitialMessage();
       if(initialMessage!=null)await openRideFromMessage(initialMessage);
-    }catch(_){}
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Notification setup failed: ${e.toString()}')));
+    }
   }
   Future<bool> _permission()async{
     if(!await Geolocator.isLocationServiceEnabled())return false;
