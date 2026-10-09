@@ -238,6 +238,12 @@ jobs:
           test -n "$VERSION"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      - name: Build x86_64 smoke-test APK
+        env:
+          MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
+        shell: bash
+        run: flutter build apk --debug --target-platform android-x64 --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN}"
+
       - name: Android runtime smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
@@ -256,7 +262,7 @@ jobs:
             test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
             adb logcat -c
             for attempt in 1 2 3; do
-              if adb install -r build/app/outputs/flutter-apk/app-release.apk; then break; fi
+              if adb install -r build/app/outputs/flutter-apk/app-debug.apk; then break; fi
               if [ "$attempt" -eq 3 ]; then echo "APK install failed after 3 attempts"; exit 1; fi
               adb shell stop || true
               sleep 5
