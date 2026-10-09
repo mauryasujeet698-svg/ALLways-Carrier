@@ -987,6 +987,38 @@ class _ActiveRideState extends State<ActiveRide> {
     return LatLng(lat, lng);
   }
 
+  Future<void> _openGoogleMaps(LatLng? target, String label) async {
+    if (target == null || target.latitude < -90 || target.latitude > 90 ||
+        target.longitude < -180 || target.longitude > 180) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$label coordinates are not available yet.')),
+      );
+      return;
+    }
+    final appUri = Uri.parse('google.navigation:q=${target.latitude},${target.longitude}&mode=d');
+    final webUri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}&travelmode=driving');
+    try {
+      final opened = await launchUrl(appUri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        final fallback = await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        if (!fallback && mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open navigation. Please check your maps app or browser.')),
+        );
+      }
+    } catch (_) {
+      try {
+        final fallback = await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        if (!fallback && mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open navigation. Please check your maps app or browser.')),
+        );
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Navigation is unavailable on this device.')),
+        );
+      }
+    }
+  }
+
   Future<void> loadRoute(LatLng start, LatLng end) async {
     try {
       final url = Uri.parse(
@@ -1231,6 +1263,19 @@ class _ActiveRideState extends State<ActiveRide> {
                           style: const TextStyle(color: Colors.grey),
                         ),
                         const SizedBox(height: 10),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: status.toLowerCase() == 'started'
+                                ? (destination == null ? null : () => _openGoogleMaps(destination, 'Destination'))
+                                : (pickup == null ? null : () => _openGoogleMaps(pickup, 'Pickup')),
+                            icon: const Icon(Icons.directions),
+                            label: Text(status.toLowerCase() == 'started'
+                                ? 'Navigate to Destination'
+                                : 'Track Customer / Navigate to Pickup'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
                         SizedBox(
                           width: double.infinity,
                           child: FilledButton(
