@@ -584,7 +584,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       DriverPartnerEarnings(user:widget.user),
-      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),onHistory:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:widget.user))),),
+      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),onHistory:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:widget.user))),onNotifications:_notifications,),
       DriverPartnerVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
@@ -1482,12 +1482,13 @@ Future<void> _chooseAllwaysLanguage(BuildContext context) async {
 }
 
 class DriverPartnerProfile extends StatelessWidget{
-  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;final VoidCallback onHistory;
-  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport,required this.onHistory});
+  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;final VoidCallback onHistory;final Future<void> Function() onNotifications;
+  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport,required this.onHistory,required this.onNotifications});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
     Card(child:ListTile(leading:const Icon(Icons.history,color:driverTeal),title:const Text('Ride History'),subtitle:const Text('Completed and terminal rides from the last 7 calendar days.'),trailing:const Icon(Icons.chevron_right),onTap:onHistory)),
+    Card(child:ListTile(leading:const Icon(Icons.notifications_active_outlined,color:driverTeal),title:const Text('Notifications & alerts'),subtitle:const Text('Retry notification permission and token registration.'),trailing:const Icon(Icons.refresh),onTap:onNotifications)),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:driverTeal),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
