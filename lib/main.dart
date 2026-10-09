@@ -491,12 +491,19 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
   }
   Future<void> _startRide(DocumentReference ref) async {
     final pinController=TextEditingController();
-    try{
+    try {
       final pin=await showDialog<String>(
         context:context,
         builder:(dialogContext)=>AlertDialog(
           title:const Text('Passenger confirmation'),
-          content:TextField(controller:pinController,autofocus:true,keyboardType:TextInputType.number,maxLength:4,inputFormatters:[FilteringTextInputFormatter.digitsOnly],decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN')),
+          content:TextField(
+            controller:pinController,
+            autofocus:true,
+            keyboardType:TextInputType.number,
+            maxLength:4,
+            inputFormatters:[FilteringTextInputFormatter.digitsOnly],
+            decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN'),
+          ),
           actions:[
             TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
             FilledButton(onPressed:()=>Navigator.pop(dialogContext,pinController.text.trim()),child:const Text('Start ride')),
@@ -504,10 +511,54 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         ),
       );
       if(pin==null)return;
-      if(!RegExp(r'^\\d{4}
-    }catch(e){
+      if(!RegExp(r'^\d{4}$').hasMatch(pin)){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter all 4 digits of the customer PIN.')));
+        return;
+      }
+      final latest=await ref.get();
+      final ride=latest.data() as Map<String,dynamic>?;
+      if(!latest.exists || ride==null){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('This ride is no longer available. Refresh your ride list.')));
+        return;
+      }
+      if((ride['driverUid']??'').toString()!=widget.user.uid){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('This ride is not assigned to your account.')));
+        return;
+      }
+      final status=(ride['status']??'').toString().toLowerCase();
+      if(!const {'accepted','arrived'}.contains(status)){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Customer PIN can be used after acceptance/arrival. Current ride status: $status.')));
+        return;
+      }
+      final callable=FirebaseFunctions.instanceFor(region:'asia-south1').httpsCallable(
+        'verifyConfirmationPin',
+        options:HttpsCallableOptions(timeout:const Duration(seconds:25)),
+      );
+      final result=await callable.call({'type':'ride','id':ref.id,'pin':pin});
+      final payload=result.data;
+      if(payload is! Map || payload['ok']!=true){
+        throw FirebaseFunctionsException(code:'failed-precondition',message:'The server did not confirm this PIN. Please try again.');
+      }
+      if(mounted){
+        setState(()=>activeRideId=ref.id);
+        _watchActiveRide();
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PIN verified securely. Ride started.')));
+      }
+    } on FirebaseFunctionsException catch(e) {
+      final message=switch(e.code){
+        'permission-denied'=>'The PIN is incorrect, or this ride is not assigned to you.',
+        'failed-precondition'=>'The ride is not ready to start. Refresh the ride and try again.',
+        'not-found'=>'Ride not found. Refresh your ride list.',
+        'unavailable'=>'Network/server unavailable. Check internet and try again.',
+        'deadline-exceeded'=>'PIN verification timed out. Check your connection and retry.',
+        _=>e.message??'Could not verify the customer PIN. Please try again.',
+      };
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(message)));
+    } catch(e) {
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));
-    }finally{pinController.dispose();}
+    } finally {
+      pinController.dispose();
+    }
   }
 
   Future<void> _complete(DocumentReference ref)async{
