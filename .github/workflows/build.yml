@@ -244,12 +244,37 @@ jobs:
           api-level: 35
           arch: x86_64
           profile: pixel_2
-          cores: 4
+          cores: 2
           disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -memory 4096 -gpu swiftshader_indirect
           script: |
-            adb install -r build/app/outputs/flutter-apk/app-release.apk
-            timeout 90s adb shell am start -S -W -n com.allways.carrier/.MainActivity
-            for attempt in $(seq 1 10); do if adb shell pidof com.allways.carrier >/dev/null 2>&1; then exit 0; fi; sleep 2; done; echo "Driver Partner process did not remain alive after launch; collecting diagnostic logs."; (adb logcat -d -t 500 | grep -E "FATAL EXCEPTION|AndroidRuntime|Process: com\\.allways\\.carrier" || true); (adb shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity" || true); exit 1
+            adb wait-for-device
+            for attempt in $(seq 1 180); do
+              if [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ]; then break; fi
+              sleep 2
+            done
+            test "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1"
+            adb logcat -c
+            for attempt in 1 2 3; do
+              if adb install -r build/app/outputs/flutter-apk/app-release.apk; then break; fi
+              if [ "$attempt" -eq 3 ]; then echo "APK install failed after 3 attempts"; exit 1; fi
+              adb shell stop || true
+              sleep 5
+              adb shell start || true
+              sleep 10
+            done
+            timeout 90s adb shell am start -W -n com.allways.carrier/.MainActivity
+            sleep 15
+            if ! adb shell pidof com.allways.carrier >/dev/null 2>&1; then
+              echo "Driver Partner process exited after launch; Android diagnostics follow."
+              adb logcat -d -t 1200 | grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.allways\.carrier|Unable to start activity' || true
+              adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
+              exit 1
+            fi
+            if adb logcat -d -t 1200 | grep -E 'FATAL EXCEPTION|Process: com\.allways\.carrier' >/dev/null; then
+              adb logcat -d -t 1200 | grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com\.allways\.carrier' || true
+              exit 1
+            fi
 
       - name: Prepare release assets
         run: |
