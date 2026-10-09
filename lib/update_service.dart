@@ -74,10 +74,15 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
         }
       }
       if(!_newer(remoteVersion,info.version)){
+        final localIsNewer=_newer(info.version,remoteVersion);
         if(mounted)setState((){
           version=null;url=null;expectedSha256=null;notes='';
         });
-        if(!silent)_message('You’re up to date (version ${info.version}).');
+        if(!silent){
+          _message(localIsNewer
+            ? 'This build (v${info.version}) is newer than the latest published release (v$remoteVersion).'
+            : 'You’re up to date (version ${info.version}).');
+        }
         return;
       }
       if(downloadUrl.isEmpty)throw StateError('A newer version exists, but its APK asset is missing.');
