@@ -5,12 +5,12 @@ text = manifest.read_text()
 if "android.permission.REQUEST_INSTALL_PACKAGES" not in text:
     text = text.replace(
         '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>',
-        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\\n            <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
+        '<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n            <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>'
     )
 if 'MainActivity$InstallStatusReceiver' not in text:
     text = text.replace(
         '<meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="allways_urgent_v2"/>',
-        '<receiver android:name=".MainActivity$InstallStatusReceiver" android:exported="false"/>\\n              <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="allways_urgent_v2"/>'
+        '<receiver android:name=".MainActivity$InstallStatusReceiver" android:exported="false"/>\n              <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="allways_urgent_v2"/>'
     )
 manifest.write_text(text)
 
