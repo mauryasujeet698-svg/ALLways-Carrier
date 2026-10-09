@@ -323,7 +323,7 @@ class DriverPartnerShell extends StatefulWidget{
   @override State<DriverPartnerShell> createState()=>_DriverPartnerShellState();
 }
 class _DriverPartnerShellState extends State<DriverPartnerShell>{
-  int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;
+  int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;bool _acceptingRide=false;
   StreamSubscription<Position>? locationSub;
   StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
   @override void initState(){super.initState();_load();_notifications();}
@@ -366,7 +366,10 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       final p=await SharedPreferences.getInstance();
       if(p.getBool('notifications_enabled')==false)return;
       final s=await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
-      if(s.authorizationStatus==AuthorizationStatus.denied)return;
+      if(s.authorizationStatus==AuthorizationStatus.denied){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Notifications are blocked by Android. Enable ALLways notifications in system settings, then reopen this app.')));
+        return;
+      }
       await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(alert:true,badge:true,sound:true);
       await FirebaseMessaging.instance.subscribeToTopic('all_users');
       await FirebaseMessaging.instance.subscribeToTopic('carriers');
@@ -407,16 +410,23 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         ));
       });
       Future<void> openRideFromMessage(RemoteMessage message) async {
-        final rideId=(message.data['rideId']??'').toString().trim();
+        final rideId=(message.data['rideId']??message.data['id']??'').toString().trim();
         if(rideId.isEmpty)return;
         final ride=await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
-        if(!ride.exists || (ride.data()?['driverUid']??'').toString()!=widget.user.uid)return;
-        if(mounted)setState((){activeRideId=rideId;tab=2;});
+        if(!ride.exists)return;
+        final data=ride.data()??{};
+        final status=(data['status']??'').toString().toLowerCase();
+        if(const {'cancelled','completed','rejected','expired'}.contains(status))return;
+        final assigned=(data['driverUid']??'').toString()==widget.user.uid;
+        if(mounted&&assigned){setState((){activeRideId=rideId;tab=2;});return;}
+        if(mounted&&status=='searching'&&(data['driverUid']??'').toString().isEmpty){setState(()=>tab=1);}
       }
       FirebaseMessaging.onMessageOpenedApp.listen(openRideFromMessage);
       final initialMessage=await FirebaseMessaging.instance.getInitialMessage();
       if(initialMessage!=null)await openRideFromMessage(initialMessage);
-    }catch(_){}
+    }catch(e){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Notification setup failed: ${e.toString()}')));
+    }
   }
   Future<bool> _permission()async{
     if(!await Geolocator.isLocationServiceEnabled())return false;
@@ -470,6 +480,8 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
   Future<void> _reject(DocumentReference ref)async{await ref.update({'rejectedBy':FieldValue.arrayUnion([widget.user.uid]),'updatedAt':FieldValue.serverTimestamp()});}
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
   Future<void> _accept(QueryDocumentSnapshot<Map<String,dynamic>> doc)async{
+    if(_acceptingRide)return;
+    setState(()=>_acceptingRide=true);
     try{
       await FirebaseFirestore.instance.runTransaction((tx)async{
         final latest=await tx.get(doc.reference);final x=latest.data()??{};
@@ -485,6 +497,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       });
       if(mounted){setState(()=>activeRideId=doc.id);setState(()=>tab=2);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted. Opening live tracking.')));}
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+    finally{if(mounted)setState(()=>_acceptingRide=false);}
   }
   Future<void> _startRide(DocumentReference ref) async {
     final pinController=TextEditingController();
@@ -507,7 +520,9 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       );
       final result=await callable.call({'type':'ride','id':ref.id,'pin':pin});
       final payload=result.data;
-      if(payload is! Map || payload['verified']!=true) {
+      // Current deployed callable returns {ok:true, rideId}; accept the legacy
+      // verified flag too so client and backend response contracts stay compatible.
+      if(payload is! Map || (payload['ok']!=true && payload['verified']!=true)) {
         throw FirebaseFunctionsException(code:'failed-precondition',message:'The server did not confirm this PIN. Please try again.');
       }
       if(mounted){
@@ -569,8 +584,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       DriverPartnerEarnings(user:widget.user),
-      DriverPartnerRideHistory(user:widget.user),
-      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
+      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),onHistory:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:widget.user))),onNotifications:_notifications,),
       DriverPartnerVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
@@ -582,7 +596,6 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
           NavigationDestination(icon:Icon(Icons.near_me_outlined),selectedIcon:Icon(Icons.near_me),label:'Requests'),
           NavigationDestination(icon:Icon(Icons.navigation_outlined),selectedIcon:Icon(Icons.navigation),label:'Active Ride'),
           NavigationDestination(icon:Icon(Icons.currency_rupee_outlined),selectedIcon:Icon(Icons.currency_rupee),label:'Earnings'),
-          NavigationDestination(icon:Icon(Icons.history_outlined),selectedIcon:Icon(Icons.history),label:'History'),
           NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'Profile'),
           NavigationDestination(icon:Icon(Icons.directions_car_outlined),selectedIcon:Icon(Icons.directions_car),label:'Vehicle'),
         ],
@@ -980,8 +993,40 @@ class _ActiveRideState extends State<ActiveRide> {
   LatLng? point(dynamic latitude, dynamic longitude) {
     final lat = number(latitude);
     final lng = number(longitude);
-    if (lat == 0 || lng == 0) return null;
+    if (lat == 0 || lng == 0 || lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
     return LatLng(lat, lng);
+  }
+
+  Future<void> _openGoogleMaps(LatLng? target, String label) async {
+    if (target == null || target.latitude < -90 || target.latitude > 90 ||
+        target.longitude < -180 || target.longitude > 180) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$label coordinates are not available yet.')),
+      );
+      return;
+    }
+    final appUri = Uri.parse('google.navigation:q=${target.latitude},${target.longitude}&mode=d');
+    final webUri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}&travelmode=driving');
+    try {
+      final opened = await launchUrl(appUri, mode: LaunchMode.externalApplication);
+      if (!opened) {
+        final fallback = await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        if (!fallback && mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open navigation. Please check your maps app or browser.')),
+        );
+      }
+    } catch (_) {
+      try {
+        final fallback = await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        if (!fallback && mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not open navigation. Please check your maps app or browser.')),
+        );
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Navigation is unavailable on this device.')),
+        );
+      }
+    }
   }
 
   Future<void> loadRoute(LatLng start, LatLng end) async {
@@ -1230,6 +1275,19 @@ class _ActiveRideState extends State<ActiveRide> {
                         const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,
+                          child: OutlinedButton.icon(
+                            onPressed: status.toLowerCase() == 'started'
+                                ? (destination == null ? null : () => _openGoogleMaps(destination, 'Destination'))
+                                : (pickup == null ? null : () => _openGoogleMaps(pickup, 'Pickup')),
+                            icon: const Icon(Icons.directions),
+                            label: Text(status.toLowerCase() == 'started'
+                                ? 'Navigate to Destination'
+                                : 'Track Customer / Navigate to Pickup'),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
                           child: FilledButton(
                             onPressed: status.toLowerCase() == 'started'
                                 ? () => widget.onComplete(snapshot.data!.reference)
@@ -1424,11 +1482,13 @@ Future<void> _chooseAllwaysLanguage(BuildContext context) async {
 }
 
 class DriverPartnerProfile extends StatelessWidget{
-  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
-  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
+  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;final VoidCallback onHistory;final Future<void> Function() onNotifications;
+  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport,required this.onHistory,required this.onNotifications});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
+    Card(child:ListTile(leading:const Icon(Icons.history,color:driverTeal),title:const Text('Ride History'),subtitle:const Text('Completed and terminal rides from the last 7 calendar days.'),trailing:const Icon(Icons.chevron_right),onTap:onHistory)),
+    Card(child:ListTile(leading:const Icon(Icons.notifications_active_outlined,color:driverTeal),title:const Text('Notifications & alerts'),subtitle:const Text('Retry notification permission and token registration.'),trailing:const Icon(Icons.refresh),onTap:onNotifications)),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:driverTeal),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
@@ -1440,17 +1500,51 @@ class DriverPartnerProfile extends StatelessWidget{
 
 class DriverPartnerRideHistory extends StatelessWidget{
   final User user; const DriverPartnerRideHistory({super.key,required this.user});
+  static const Duration _indiaOffset=Duration(hours:5,minutes:30);
+  DateTime? _date(dynamic value){
+    if(value is Timestamp)return value.toDate();
+    if(value is DateTime)return value;
+    if(value is num){final n=value.toInt();return DateTime.fromMillisecondsSinceEpoch(n<100000000000?n*1000:n);}
+    if(value is String)return DateTime.tryParse(value);
+    return null;
+  }
+  DateTime? _event(Map<String,dynamic> x)=>_date(x['completedAt'])??_date(x['cancelledAt'])??_date(x['rejectedAt'])??_date(x['expiredAt'])??_date(x['updatedAt'])??_date(x['createdAt'])??_date(x['requestedAt']);
+  bool _recent(Map<String,dynamic> x){
+    final at=_event(x);if(at==null)return false;
+    final indiaNow=DateTime.now().toUtc().add(_indiaOffset);
+    final today=DateTime.utc(indiaNow.year,indiaNow.month,indiaNow.day);
+    final shifted=at.toUtc().add(_indiaOffset);
+    final day=DateTime.utc(shifted.year,shifted.month,shifted.day);
+    final start=today.subtract(const Duration(days:6));
+    return !day.isBefore(start)&&day.isBefore(today.add(const Duration(days:1)));
+  }
+  String _when(DateTime? date){if(date==null)return 'Time unavailable';final i=date.toUtc().add(_indiaOffset);return '${i.day.toString().padLeft(2,'0')}/${i.month.toString().padLeft(2,'0')}/${i.year} ${i.hour.toString().padLeft(2,'0')}:${i.minute.toString().padLeft(2,'0')} IST';}
   @override Widget build(BuildContext context)=>Scaffold(
     appBar:AppBar(title:const Text('Ride History')),
     body:StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
       stream:FirebaseFirestore.instance.collection('autoRideRequests').where('driverUid',isEqualTo:user.uid).snapshots(),
-      builder:(c,s){if(!s.hasData)return const Center(child:CircularProgressIndicator());final docs=s.data!.docs.toList();
-        docs.sort((a,b){final at=a.data()['completedAt'];final bt=b.data()['completedAt'];final am=at is Timestamp?at.millisecondsSinceEpoch:0;final bm=bt is Timestamp?bt.millisecondsSinceEpoch:0;return bm.compareTo(am);});
-        if(docs.isEmpty)return const Center(child:Text('No completed rides yet.'));
-        return ListView.builder(padding:const EdgeInsets.all(16),itemCount:docs.length,itemBuilder:(_,i){final x=docs[i].data();return Card(child:ListTile(
-          leading:const CircleAvatar(child:Icon(Icons.route)),title:Text((x['destinationAddress']??'Ride').toString(),maxLines:1,overflow:TextOverflow.ellipsis),
-          subtitle:Text((x['pickupAddress']??'Pickup').toString()+' • '+(x['status']??'').toString()),
-          trailing:Text('₹'+(x['carrierEarning']??x['estimatedFare']??x['fare']??0).toString(),style:const TextStyle(fontWeight:FontWeight.w900))));});
+      builder:(c,s){
+        if(s.hasError)return Center(child:Padding(padding:const EdgeInsets.all(20),child:Text('Could not load ride history: ${s.error}')));
+        if(!s.hasData)return const Center(child:CircularProgressIndicator());
+        const terminal={'completed','cancelled','canceled','rejected','expired','failed'};
+        final docs=s.data!.docs.where((d)=>terminal.contains((d.data()['status']??'').toString().toLowerCase())&&_recent(d.data())).toList();
+        docs.sort((a,b)=>(_event(b.data())??DateTime.fromMillisecondsSinceEpoch(0)).compareTo(_event(a.data())??DateTime.fromMillisecondsSinceEpoch(0)));
+        if(docs.isEmpty)return const Center(child:Padding(padding:EdgeInsets.all(24),child:Text('No ride history for today or the preceding six calendar days.',textAlign:TextAlign.center)));
+        return ListView.builder(padding:const EdgeInsets.all(16),itemCount:docs.length,itemBuilder:(_,i){
+          final d=docs[i];final x=d.data();final status=(x['status']??'Unknown').toString();
+          final fare=x['carrierEarning']??x['estimatedFare']??x['fare'];
+          final distance=x['distanceKm']??x['distance']??x['estimatedDistanceKm'];
+          return Card(margin:const EdgeInsets.only(bottom:10),child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Row(children:[Expanded(child:Text('Ride #${x['id']??d.id}',style:const TextStyle(fontWeight:FontWeight.w900))),Text(status,style:TextStyle(fontWeight:FontWeight.w800,color:status.toLowerCase()=='completed'?Colors.green:Colors.blueGrey))]),
+            const SizedBox(height:6),
+            Text(_when(_event(x)),style:const TextStyle(color:Colors.grey,fontSize:12)),
+            const SizedBox(height:6),
+            Text('Pickup: ${x['pickupAddress']??x['address']??'Unavailable'}'),
+            Text('Destination: ${x['destinationAddress']??x['destination']??'Unavailable'}'),
+            if(distance!=null)Text('Distance: $distance km'),
+            if(fare!=null)Text('Fare / earnings: ₹$fare',style:const TextStyle(fontWeight:FontWeight.w800)),
+          ])));
+        });
       }
     )
   );
