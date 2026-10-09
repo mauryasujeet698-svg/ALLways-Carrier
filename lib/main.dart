@@ -498,7 +498,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         ),
       );
       if(pin==null||pin.length!=4)return;
-      final callable=FirebaseFunctions.instance.httpsCallable(
+      final callable=FirebaseFunctions.instanceFor(region: 'asia-south1').httpsCallable(
         'verifyConfirmationPin',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
       );
@@ -513,7 +513,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
 
   Future<void> _complete(DocumentReference ref)async{
     try{
-      final callable=FirebaseFunctions.instance.httpsCallable('completeRide');
+      final callable=FirebaseFunctions.instanceFor(region: 'asia-south1').httpsCallable('completeRide');
       await callable.call({'rideId':ref.id});
       if(mounted){setState(()=>activeRideId=null);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride completed.')));}
     }on FirebaseFunctionsException catch(e){
