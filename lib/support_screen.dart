@@ -2,16 +2,17 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-class CarrierSupportScreen extends StatefulWidget {
+class DriverPartnerSupportScreen extends StatefulWidget {
   final User user;
-  const CarrierSupportScreen({super.key,required this.user});
-  @override State<CarrierSupportScreen> createState()=>_CarrierSupportScreenState();
+  const DriverPartnerSupportScreen({super.key,required this.user});
+  @override State<DriverPartnerSupportScreen> createState()=>_DriverPartnerSupportScreenState();
 }
-class _CarrierSupportScreenState extends State<CarrierSupportScreen>{
+class _DriverPartnerSupportScreenState extends State<DriverPartnerSupportScreen>{
   String area='Ride';
   final message=TextEditingController();
   String category='Ride issue';
   bool busy=false;
+  @override void dispose(){message.dispose();super.dispose();}
   Future<void> submit()async{
     if(message.text.trim().isEmpty)return;
     setState(()=>busy=true);
@@ -48,7 +49,7 @@ class _CarrierSupportScreenState extends State<CarrierSupportScreen>{
       StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
         stream:FirebaseFirestore.instance.collection('supportTickets').where('requesterId',isEqualTo:widget.user.uid).limit(20).snapshots(),
         builder:(c,s){if(!s.hasData)return const Center(child:CircularProgressIndicator());if(s.data!.docs.isEmpty)return const Text('No support requests yet.');
-          return Column(children:s.data!.docs.map((d){final x=d.data();return Card(child:ListTile(title:Text((x['subject']??'Support request').toString()),subtitle:Text((x['status']??'open').toString()+' • '+(x['message']??'').toString(),maxLines:2,overflow:TextOverflow.ellipsis)));}).toList());}
+          return Column(children:s.data!.docs.map((d){final x=d.data();return Card(child:ListTile(title:Text((x['subject']??'Support request').toString()),subtitle:Text((x['status']??'open').toString()+' • '+(x['adminReply']??x['message']??'').toString(),maxLines:3,overflow:TextOverflow.ellipsis)));}).toList());}
       )
     ])
   );

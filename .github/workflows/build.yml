@@ -71,7 +71,7 @@ jobs:
           if "signingConfigs {" not in s:
               s = s.replace("android {", "android {" + chr(10) + signing, 1)
           s = s.replace('signingConfig = signingConfigs.getByName("debug")',
-              'signingConfig = if (keystorePropertiesFile.exists()) { signingConfigs.getByName("release") } else { signingConfigs.getByName("debug") }')
+              'signingConfig = signingConfigs.getByName("release")')
           s = s.replace('namespace = "com.example.carrier"', 'namespace = "com.allways.carrier"')
           s = s.replace('applicationId = "com.example.carrier"', 'applicationId = "com.allways.carrier"')
           if 'namespace = "com.allways.carrier"' not in s:
@@ -236,6 +236,19 @@ jobs:
           test -n "$VERSION"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
+      - name: Android runtime smoke test
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          arch: x86_64
+          profile: pixel_2
+          cores: 4
+          disable-animations: true
+          script: |
+            adb install -r build/app/outputs/flutter-apk/app-release.apk
+            timeout 90s adb shell am start -S -W -n com.allways.carrier/.MainActivity
+            adb shell pidof com.allways.carrier
+
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
@@ -250,22 +263,7 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/allways-carrier-v${APP_VERSION}.apk
-            release-assets/allways-carrier-latest.apk
+            release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk
+            release-assets/allways-driver-partner-latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-      - name: Android runtime smoke test
-        continue-on-error: true
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          profile: pixel_2
-          cores: 4
-          disable-animations: true
-          script: |
-            adb install -r build/app/outputs/flutter-apk/app-release.apk
-            timeout 90s adb shell am start -S -W -n com.allways.carrier/.MainActivity
-            adb shell pidof com.allways.carrier

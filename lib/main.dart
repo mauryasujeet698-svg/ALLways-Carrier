@@ -490,7 +490,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         context:context,
         builder:(dialogContext)=>AlertDialog(
           title:const Text('Passenger confirmation'),
-          content:TextField(controller:pinController,autofocus:true,keyboardType:TextInputType.number,maxLength:4,decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN')),
+          content:TextField(controller:pinController,autofocus:true,keyboardType:TextInputType.number,maxLength:4,inputFormatters:[FilteringTextInputFormatter.digitsOnly],decoration:const InputDecoration(labelText:'4-digit confirmation number',hintText:'Enter passenger PIN')),
           actions:[
             TextButton(onPressed:()=>Navigator.pop(dialogContext),child:const Text('Cancel')),
             FilledButton(onPressed:()=>Navigator.pop(dialogContext,pinController.text.trim()),child:const Text('Start ride')),
@@ -498,11 +498,11 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         ),
       );
       if(pin==null||pin.length!=4)return;
-      final callable=FirebaseFunctions.instance.httpsCallable(
+      final callable=FirebaseFunctions.instanceFor(region: 'asia-south1').httpsCallable(
         'verifyConfirmationPin',
         options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
       );
-      await callable.call({'type':'ride','id':ref.id,'pin':pin});
+      await callable.call({'type':'ride','id':ref.id,'rideId':ref.id,'pin':pin});
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('PIN verified. Ride started.')));
     }on FirebaseFunctionsException catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not verify the confirmation number.')));
@@ -513,7 +513,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
 
   Future<void> _complete(DocumentReference ref)async{
     try{
-      final callable=FirebaseFunctions.instance.httpsCallable('completeRide');
+      final callable=FirebaseFunctions.instanceFor(region: 'asia-south1').httpsCallable('completeRide');
       await callable.call({'rideId':ref.id});
       if(mounted){setState(()=>activeRideId=null);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride completed.')));}
     }on FirebaseFunctionsException catch(e){
