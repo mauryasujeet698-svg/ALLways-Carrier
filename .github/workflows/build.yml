@@ -250,14 +250,13 @@ jobs:
           draft: false
           prerelease: false
           files: |
-            release-assets/allways-carrier-v${APP_VERSION}.apk
-            release-assets/allways-carrier-latest.apk
+            release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk
+            release-assets/allways-driver-partner-latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 
       - name: Android runtime smoke test
-        continue-on-error: true
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
