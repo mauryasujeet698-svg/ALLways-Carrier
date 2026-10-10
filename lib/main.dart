@@ -1281,7 +1281,7 @@ class DriverPartnerVehiclePage extends StatefulWidget{
 class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
   final categories=['Motorcycle','Scooter','E-bike','Auto Rickshaw','E-Rickshaw','Hatchback','Sedan','SUV','MUV','Luxury Car','Taxi / Cab','Tempo Traveller','Van','Mini Bus','Bus','Pickup Truck','Mini Truck','Bolero Pickup','Goods Auto','Cargo Van','Tractor','Tractor Trolley','Trailer','Ambulance','Other'];
   Future<void> _listVehicle()async{
-    final category=ValueNotifier('Motorcycle');final price=TextEditingController();final capacity=TextEditingController();final phone=TextEditingController();final city=TextEditingController();final pincode=TextEditingController();bool negotiate=true;
+    final category=ValueNotifier('Motorcycle');final price=TextEditingController();final capacity=TextEditingController();final phone=TextEditingController();final city=TextEditingController();final pincode=TextEditingController();final imageUrl=TextEditingController();bool negotiate=true;
     try{
       final ok=await showDialog<bool>(context:context,builder:(c)=>StatefulBuilder(builder:(c,setD)=>AlertDialog(
         title:const Text('List your vehicle'),
@@ -1291,7 +1291,8 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
           TextField(controller:city,decoration:const InputDecoration(labelText:'City / town')),
           TextField(controller:pincode,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Pincode')),
           TextField(controller:capacity,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Seats / capacity')),
-          TextField(controller:price,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Price (₹)')),
+          TextField(controller:imageUrl,keyboardType:TextInputType.url,decoration:const InputDecoration(labelText:'Vehicle image URL (optional)',hintText:'Paste a hosted vehicle photo URL')),
+          TextField(controller:price,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'Average price per kilometre (₹/km)',hintText:'e.g. 9')),
           SwitchListTile(contentPadding:EdgeInsets.zero,title:const Text('Allow negotiation'),value:negotiate,onChanged:(v)=>setD(()=>negotiate=v)),
         ])),
         actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('Cancel')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('Publish'))],
@@ -1300,15 +1301,28 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
       final cleanPhone=phone.text.replaceAll(RegExp(r'\D'),'');
       final cleanPrice=num.tryParse(price.text.trim())??0;
       if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
+      Position? currentPosition;
+      try {
+        if (await Geolocator.isLocationServiceEnabled()) {
+          var permission = await Geolocator.checkPermission();
+          if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
+          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
+            currentPosition = await Geolocator.getCurrentPosition();
+          }
+        }
+      } catch (_) {}
       await FirebaseFirestore.instance.collection('vehicles').add({
         'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Driver Partner','ownerPhone':cleanPhone,
-        'category':category.value,'vehicleType':category.value,'price':cleanPrice,'capacity':num.tryParse(capacity.text.trim())??0,
+        'category':category.value,'vehicleType':category.value,'price':cleanPrice,'pricePerKm':cleanPrice,'pricingUnit':'km','capacity':num.tryParse(capacity.text.trim())??0,
+        'imageUrl':imageUrl.text.trim(),'vehicleImageUrl':imageUrl.text.trim(),
         'allowNegotiation':negotiate,'status':'available','listingStatus':'active','available':true,
         'manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
+        'currentLocation':currentPosition==null?null:{'latitude':currentPosition.latitude,'longitude':currentPosition.longitude},
+        'latitude':currentPosition?.latitude,'longitude':currentPosition?.longitude,
         'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp(),
       });
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Vehicle listed successfully.')));
-    }finally{category.dispose();price.dispose();capacity.dispose();phone.dispose();city.dispose();pincode.dispose();}
+    }finally{category.dispose();price.dispose();capacity.dispose();phone.dispose();city.dispose();pincode.dispose();imageUrl.dispose();}
   }
   Future<void> _updateBooking(DocumentReference ref,String status)async{
     try{
@@ -1365,7 +1379,7 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
               child:ListTile(
                 leading:const Icon(Icons.directions_car_outlined),
                 title:Text((x['category']??'Vehicle').toString(),style:const TextStyle(fontWeight:FontWeight.w800)),
-                subtitle:Text('₹'+(x['price']??0).toString()+' • '+(x['status']??'').toString()),
+                subtitle:Text('₹'+(x['pricePerKm']??x['price']??0).toString()+'/km • '+(x['status']??'').toString()),
                 trailing:Switch(
                   value:available,
                   onChanged:(v)=>d.reference.update({'status':v?'available':'paused','listingStatus':v?'active':'paused','available':v,'updatedAt':FieldValue.serverTimestamp()}),
