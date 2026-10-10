@@ -1198,7 +1198,7 @@ class _ActiveRideState extends State<ActiveRide> {
                           IconButton(
                             tooltip: status == 'started' ? 'Navigate to destination' : 'Navigate to passenger pickup',
                             onPressed: () async {
-                              final target = navigationTarget!;
+                              final target = navigationTarget;
                               final uri = Uri.parse(
                                 'https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}&travelmode=driving',
                               );
