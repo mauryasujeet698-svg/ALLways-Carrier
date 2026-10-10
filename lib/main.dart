@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'privacy_policy_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -1464,6 +1465,7 @@ class DriverPartnerProfile extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.currency_rupee,color:driverTeal),title:const Text('Earnings'),subtitle:const Text('Completed rides, fares and net earnings'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerEarnings(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.history,color:driverTeal),title:const Text('Ride History'),subtitle:const Text('View previous and cancelled rides'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
+    Card(child:ListTile(leading:const Icon(Icons.privacy_tip_outlined),title:const Text('Privacy Policy & Terms'),subtitle:const Text('How ALLways uses account, location and trip information.'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AllwaysPrivacyPolicyScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
 }
