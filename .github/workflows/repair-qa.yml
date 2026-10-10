@@ -6,6 +6,7 @@ on:
       - "lib/**"
       - "android/**"
       - "pubspec.yaml"
+      - "tool/**"
       - ".github/workflows/repair-qa.yml"
   workflow_dispatch:
 permissions:
@@ -32,7 +33,9 @@ jobs:
         run: flutter test
         continue-on-error: true
       - name: Generate Android scaffold for QA only
-        run: flutter create --platforms=android --org com.allways --project-name driver_partner .
+        run: flutter create --platforms=android --org com.allways --project-name carrier .
+      - name: Configure native APK updater for QA
+        run: python3 tool/configure_android_updater.py
       - name: Build Driver Partner QA APK (debug, no release)
         run: flutter build apk --debug --target-platform android-arm64
       - name: Validate artifact
