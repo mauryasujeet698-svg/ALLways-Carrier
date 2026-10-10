@@ -1237,6 +1237,19 @@ class _ActiveRideState extends State<ActiveRide> {
                         const SizedBox(height: 10),
                         SizedBox(
                           width: double.infinity,
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.directions),
+                            label: const Text('Navigate in Google Maps'),
+                            onPressed: navigationTarget == null ? null : () async {
+                              final target = navigationTarget;
+                              final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}&travelmode=driving');
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            },
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
                           child: FilledButton(
                             onPressed: status.toLowerCase() == 'started'
                                 ? () => widget.onComplete(snapshot.data!.reference)
