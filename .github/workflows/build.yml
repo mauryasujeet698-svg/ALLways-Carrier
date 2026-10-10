@@ -196,9 +196,9 @@ jobs:
           import re
           p = Path("android/app/src/main/AndroidManifest.xml")
           s = p.read_text()
-          updated = re.sub(r'(<application\b[^>]*\bandroid:icon=")[^"]+(")', r'\1@drawable/allways_brand_icon\2', s, count=1, flags=re.S)
-          if updated == s:
-              raise SystemExit("Could not find launcher icon in AndroidManifest.xml")
+          updated, count = re.subn(r'android:icon="[^"]+"', 'android:icon="@drawable/allways_brand_icon"', s, count=1)
+          if count != 1:
+              raise SystemExit("Could not find launcher icon attribute in AndroidManifest.xml")
           p.write_text(updated)
           PY
 
@@ -316,3 +316,4 @@ jobs:
             release-assets/allways-driver-partner-latest.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
