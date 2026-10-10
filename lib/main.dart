@@ -350,10 +350,13 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
     activeRideSub=ref.snapshots().listen((snap)async{
       final status=(snap.data()?['status']??'').toString().toLowerCase();
       if(const {'cancelled','completed','rejected','expired'}.contains(status)){
-        await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({
-          'status':'online',
-          'availableForRides':true,
-          'isOnline':true,
+        final profileRef=FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid);
+        final profileSnap=await profileRef.get();
+        final keepOnline=(profileSnap.data()?['isOnline']??true)==true;
+        await profileRef.set({
+          'status':keepOnline?'online':'offline',
+          'availableForRides':keepOnline,
+          'isOnline':keepOnline,
           'activeRideId':null,
           'statusUpdatedAt':FieldValue.serverTimestamp(),
         },SetOptions(merge:true));
@@ -457,7 +460,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
     if(value){
       final profile = await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).get();
       final approval = (profile.data()?['approvalStatus'] ?? '').toString().toLowerCase();
-      if (approval.isNotEmpty && approval != 'approved') {
+      if (approval != 'approved') {
         if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Admin approval is required before going online.')));
         return;
       }
