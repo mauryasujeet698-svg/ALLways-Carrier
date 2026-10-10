@@ -323,11 +323,14 @@ class DriverPartnerShell extends StatefulWidget{
   @override State<DriverPartnerShell> createState()=>_DriverPartnerShellState();
 }
 class _DriverPartnerShellState extends State<DriverPartnerShell>{
-  int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;
+  int tab=0;bool online=false;bool notificationsEnabled=true;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;
   StreamSubscription<Position>? locationSub;
   StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
+  StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _messageSub;
+  StreamSubscription<RemoteMessage>? _openedMessageSub;
   @override void initState(){super.initState();_load();_notifications();}
-  @override void dispose(){locationSub?.cancel();activeRideSub?.cancel();super.dispose();}
+  @override void dispose(){locationSub?.cancel();activeRideSub?.cancel();_tokenRefreshSub?.cancel();_messageSub?.cancel();_openedMessageSub?.cancel();super.dispose();}
   Future<void> _load()async{
     try{
       final r=await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).get();
@@ -361,62 +364,166 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       }
     });
   }
-  Future<void> _notifications()async{
-    try{
-      final p=await SharedPreferences.getInstance();
-      if(p.getBool('notifications_enabled')==false)return;
-      final s=await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
-      if(s.authorizationStatus==AuthorizationStatus.denied)return;
-      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(alert:true,badge:true,sound:true);
+  Future<void> _notifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('notifications_enabled') ?? true;
+    if (mounted) setState(() => notificationsEnabled = enabled);
+    if (!enabled) return;
+
+    NotificationSettings settings;
+    try {
+      settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Driver notification permission failed: ' + error.toString());
+      debugPrint(stackTrace.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Notifications could not be initialized. Check your connection and try again.')),
+        );
+      }
+      return;
+    }
+
+    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      await prefs.setBool('notifications_enabled', false);
+      if (mounted) setState(() => notificationsEnabled = false);
+      return;
+    }
+
+    try {
+      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
       await FirebaseMessaging.instance.subscribeToTopic('all_users');
       await FirebaseMessaging.instance.subscribeToTopic('carriers');
-      await p.setBool('notifications_enabled',true);
+      await prefs.setBool('notifications_enabled', true);
+      if (mounted) setState(() => notificationsEnabled = true);
+    } catch (error, stackTrace) {
+      debugPrint('Driver notification topic/configuration failed: ' + error.toString());
+      debugPrint(stackTrace.toString());
+      // Continue setting up the device listeners even if a topic subscription fails.
+    }
 
-      Future<void> saveToken(String? t)async{
-        if(t==null||t.isEmpty)return;
-        final data={
-          'uid':widget.user.uid,
-          'token':t,
-          'role':'carrier',
-          'platform':'mobile',
-          'notificationsEnabled':true,
-          'notificationPreferences':{'travelUpdates':true,'offers':true,'announcements':true},
-          'updatedAt':FieldValue.serverTimestamp(),
-        };
-        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set(data,SetOptions(merge:true));
-        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).set(data,SetOptions(merge:true));
+    Future<void> saveToken(String? token) async {
+      if (token == null || token.isEmpty) return;
+      // Firestore rules allow a user to write only to fcmTokens/{uid}/tokens/{token}.
+      // Writing the parent fcmTokens/{uid} document is denied and used to abort
+      // initialization before onMessage/onTokenRefresh handlers were attached.
+      await FirebaseFirestore.instance
+          .collection('fcmTokens')
+          .doc(widget.user.uid)
+          .collection('tokens')
+          .doc(token)
+          .set({
+        'uid': widget.user.uid,
+        'token': token,
+        'role': 'carrier',
+        'platform': 'android',
+        'notificationsEnabled': true,
+        'notificationPreferences': {
+          'travelUpdates': true,
+          'offers': true,
+          'announcements': true,
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    await _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      try {
+        await saveToken(token);
+      } catch (error, stackTrace) {
+        debugPrint('Driver FCM token refresh write failed: ' + error.toString());
+        debugPrint(stackTrace.toString());
       }
+    });
 
+    try {
       await saveToken(await FirebaseMessaging.instance.getToken());
-      FirebaseMessaging.instance.onTokenRefresh.listen(saveToken);
-      FirebaseMessaging.onMessage.listen((RemoteMessage message){
-        if(!mounted)return;
-        HapticFeedback.vibrate();
-        SystemSound.play(SystemSoundType.alert);
-        try {
-          const MethodChannel('allways_notifications').invokeMethod('showNotification', {
-            'title': message.notification?.title ?? message.data['title'] ?? 'ALLways',
-            'body': message.notification?.body ?? message.data['body'] ?? message.data['message'] ?? 'You have a new ALLways update.',
-          });
-        } catch (_) {}
-        final title=message.notification?.title??message.data['title']??'ALLways';
-        final body=message.notification?.body??message.data['body']??'';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:Text(body.isEmpty?title:'$title: $body'),
-          duration:const Duration(seconds:4),
-        ));
-      });
-      Future<void> openRideFromMessage(RemoteMessage message) async {
-        final rideId=(message.data['rideId']??'').toString().trim();
-        if(rideId.isEmpty)return;
-        final ride=await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
-        if(!ride.exists || (ride.data()?['driverUid']??'').toString()!=widget.user.uid)return;
-        if(mounted)setState((){activeRideId=rideId;tab=2;});
+    } catch (error, stackTrace) {
+      debugPrint('Driver FCM token registration failed: ' + error.toString());
+      debugPrint(stackTrace.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Push registration failed. Ride requests may not alert until this is resolved.')),
+        );
       }
-      FirebaseMessaging.onMessageOpenedApp.listen(openRideFromMessage);
-      final initialMessage=await FirebaseMessaging.instance.getInitialMessage();
-      if(initialMessage!=null)await openRideFromMessage(initialMessage);
-    }catch(_){}
+    }
+
+    await _messageSub?.cancel();
+    _messageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (!mounted) return;
+      HapticFeedback.vibrate();
+      SystemSound.play(SystemSoundType.alert);
+      const MethodChannel('allways_notifications').invokeMethod('showNotification', {
+        'title': message.notification?.title ?? message.data['title'] ?? 'ALLways',
+        'body': message.notification?.body ?? message.data['body'] ?? message.data['message'] ?? 'You have a new ALLways update.',
+      }).catchError((Object error) {
+        debugPrint('Driver foreground notification display failed: ' + error.toString());
+      });
+      final title = message.notification?.title ?? message.data['title'] ?? 'ALLways';
+      final body = message.notification?.body ?? message.data['body'] ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(body.isEmpty ? title : title + ': ' + body), duration: const Duration(seconds: 4)),
+      );
+    });
+
+    Future<void> openRideFromMessage(RemoteMessage message) async {
+      final rideId = (message.data['rideId'] ?? '').toString().trim();
+      if (rideId.isEmpty) return;
+      try {
+        final ride = await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
+        if (!ride.exists || (ride.data()?['driverUid'] ?? '').toString() != widget.user.uid) return;
+        if (mounted) setState(() { activeRideId = rideId; tab = 2; });
+      } catch (error, stackTrace) {
+        debugPrint('Driver notification tap routing failed: ' + error.toString());
+        debugPrint(stackTrace.toString());
+      }
+    }
+
+    await _openedMessageSub?.cancel();
+    _openedMessageSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      openRideFromMessage(message);
+    });
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) await openRideFromMessage(initialMessage);
+  }
+
+  Future<void> _setNotifications(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notifications_enabled', value);
+    if (!value) {
+      try {
+        await FirebaseMessaging.instance.unsubscribeFromTopic('all_users');
+        await FirebaseMessaging.instance.unsubscribeFromTopic('carriers');
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null && token.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('fcmTokens')
+              .doc(widget.user.uid)
+              .collection('tokens')
+              .doc(token)
+              .delete();
+        }
+      } catch (error, stackTrace) {
+        debugPrint('Driver notification disable cleanup failed: ' + error.toString());
+        debugPrint(stackTrace.toString());
+      }
+      await _tokenRefreshSub?.cancel();
+      await _messageSub?.cancel();
+      await _openedMessageSub?.cancel();
+      if (mounted) setState(() => notificationsEnabled = false);
+      return;
+    }
+    if (mounted) setState(() => notificationsEnabled = true);
+    await _notifications();
   }
   Future<bool> _permission()async{
     if(!await Geolocator.isLocationServiceEnabled())return false;
@@ -568,7 +675,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
-      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
+      DriverPartnerProfile(user:widget.user,vehicle:vehicle,notificationsEnabled:notificationsEnabled,onNotifications:_setNotifications,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
       DriverPartnerVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
@@ -1458,11 +1565,12 @@ Future<void> _chooseAllwaysLanguage(BuildContext context) async {
 }
 
 class DriverPartnerProfile extends StatelessWidget{
-  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
-  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
+  final User user;final String vehicle;final bool notificationsEnabled;final Future<void> Function(bool) onNotifications;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
+  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.notificationsEnabled,required this.onNotifications,required this.onVehicle,required this.onSos,required this.onSupport});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
+    Card(child:SwitchListTile(secondary:const Icon(Icons.notifications_active_outlined,color:driverTeal),title:const Text('Notifications'),subtitle:const Text('Receive ride requests and ALLways announcements.'),value:notificationsEnabled,onChanged:(value){onNotifications(value);})),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:driverTeal),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
