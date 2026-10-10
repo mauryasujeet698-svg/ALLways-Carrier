@@ -69,7 +69,31 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
     }catch(e){if(mounted&&Navigator.of(context).canPop())Navigator.of(context).pop();if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Update failed: $e')));}finally{p.dispose();if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context) {
-    if (version == null) return widget.child;
+    if (version == null) {
+      return Stack(children: [
+        widget.child,
+        Positioned(
+          right: 12,
+          bottom: 96,
+          child: SafeArea(
+            child: FloatingActionButton.small(
+              heroTag: 'allways_update_check_${widget.repo}',
+              tooltip: 'Check for updates',
+              onPressed: busy ? null : () async {
+                await _check();
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: Text(version == null
+                    ? 'No update was detected. Check your connection and try again if needed.'
+                    : 'ALLways update ${version!} is available at the top of the screen.'),
+                ));
+              },
+              child: const Icon(Icons.system_update_alt),
+            ),
+          ),
+        ),
+      ]);
+    }
     return Stack(children:[widget.child,Positioned(top:0,left:0,right:0,child:Material(elevation:6,color:Theme.of(context).colorScheme.primaryContainer,child:SafeArea(bottom:false,child:Padding(padding:const EdgeInsets.fromLTRB(14,10,8,10),child:Row(children:[const Icon(Icons.system_update),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('New ALLways update available',style:TextStyle(fontWeight:FontWeight.w900)),Text('Version $version is ready${notes.isNotEmpty ? ' • ' + notes.replaceAll(RegExp(r'\\s+'),' ').trim() : ''}',maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12))])),FilledButton(onPressed:busy?null:_install,child:const Text('UPDATE'))])))))]);
   }
 }
