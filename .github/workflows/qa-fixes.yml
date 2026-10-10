@@ -1,0 +1,57 @@
+name: ALLways QA Build
+on:
+  push:
+    branches: [fixes-2026-10-10]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: allways-qa-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Static analysis
+        run: flutter analyze
+
+      - name: Unit and widget tests
+        run: flutter test
+
+      - name: Generate Android project scaffolding
+        run: flutter create --platforms=android --org com.allways --project-name carrier .
+
+      - name: Build QA debug APK
+        run: flutter build apk --debug --target-platform android-arm64
+
+      - name: Verify APK and report size
+        shell: bash
+        run: |
+          APK="build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK"
+          stat -c "QA APK size: %s bytes" "$APK"
+          sha256sum "$APK"
+
+      - name: Upload QA APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: allways-driver-partner-qa-apk
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          if-no-files-found: error
+          retention-days: 7
