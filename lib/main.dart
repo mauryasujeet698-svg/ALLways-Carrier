@@ -566,7 +566,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
   }
   @override Widget build(BuildContext context){
     final pages=[
-      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4),onRequests:()=>setState(()=>tab=1)),
+      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4),onRequests:()=>setState(()=>tab=1),onActiveRide:()=>setState(()=>tab=2)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
@@ -595,6 +595,7 @@ class DriverPartnerHome extends StatelessWidget {
   final Future<void> Function(bool) onOnline;
   final VoidCallback onVehicleListings;
   final VoidCallback onRequests;
+  final VoidCallback onActiveRide;
 
   const DriverPartnerHome({
     super.key,
@@ -604,6 +605,7 @@ class DriverPartnerHome extends StatelessWidget {
     required this.onOnline,
     required this.onVehicleListings,
     required this.onRequests,
+    required this.onActiveRide,
   });
 
   @override
@@ -613,15 +615,6 @@ class DriverPartnerHome extends StatelessWidget {
         : LatLng(position!.latitude, position!.longitude);
 
     final bottomItems = <Widget>[
-      Card(
-        child: ListTile(
-          leading: const CircleAvatar(backgroundColor: Color(0x1A0B6E69), child: Icon(Icons.directions_car, color: driverTeal)),
-          title: const Text('Vehicle listings', style: TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: const Text('Add a vehicle, photos, current location and price per kilometre'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: onVehicleListings,
-        ),
-      ),
       Card(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
@@ -675,6 +668,7 @@ class DriverPartnerHome extends StatelessWidget {
             ),
             subtitle: Text('#' + activeRideId!),
             trailing: const Icon(Icons.chevron_right),
+            onTap: onActiveRide,
           ),
         ),
       );
