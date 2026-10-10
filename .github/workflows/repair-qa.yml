@@ -28,10 +28,8 @@ jobs:
       - run: flutter pub get
       - name: Static analysis
         run: flutter analyze
-        continue-on-error: true
       - name: Tests
         run: flutter test
-        continue-on-error: true
       - name: Generate Android scaffold for QA only
         run: flutter create --platforms=android --org com.allways --project-name carrier .
       - name: Configure native APK updater for QA
@@ -47,7 +45,7 @@ jobs:
           sha256sum "$APK"
       - uses: actions/upload-artifact@v4
         with:
-          name: allways-driver-partner-repair-qa-apk
+          name: allways-driver-partner-debug-qa-only
           path: build/app/outputs/flutter-apk/*debug.apk
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
