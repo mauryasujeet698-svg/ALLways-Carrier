@@ -565,11 +565,9 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
   }
   @override Widget build(BuildContext context){
     final pages=[
-      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline),
+      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
-      DriverPartnerEarnings(user:widget.user),
-      DriverPartnerRideHistory(user:widget.user),
       DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
       DriverPartnerVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
@@ -581,8 +579,6 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
           NavigationDestination(icon:Icon(Icons.home_outlined),selectedIcon:Icon(Icons.home),label:'Home'),
           NavigationDestination(icon:Icon(Icons.near_me_outlined),selectedIcon:Icon(Icons.near_me),label:'Requests'),
           NavigationDestination(icon:Icon(Icons.navigation_outlined),selectedIcon:Icon(Icons.navigation),label:'Active Ride'),
-          NavigationDestination(icon:Icon(Icons.currency_rupee_outlined),selectedIcon:Icon(Icons.currency_rupee),label:'Earnings'),
-          NavigationDestination(icon:Icon(Icons.history_outlined),selectedIcon:Icon(Icons.history),label:'History'),
           NavigationDestination(icon:Icon(Icons.person_outline),selectedIcon:Icon(Icons.person),label:'Profile'),
           NavigationDestination(icon:Icon(Icons.directions_car_outlined),selectedIcon:Icon(Icons.directions_car),label:'Vehicle'),
         ],
@@ -596,6 +592,7 @@ class DriverPartnerHome extends StatelessWidget {
   final Position? position;
   final String? activeRideId;
   final Future<void> Function(bool) onOnline;
+  final VoidCallback onVehicleListings;
 
   const DriverPartnerHome({
     super.key,
@@ -603,6 +600,7 @@ class DriverPartnerHome extends StatelessWidget {
     required this.position,
     required this.activeRideId,
     required this.onOnline,
+    required this.onVehicleListings,
   });
 
   @override
@@ -612,6 +610,15 @@ class DriverPartnerHome extends StatelessWidget {
         : LatLng(position!.latitude, position!.longitude);
 
     final bottomItems = <Widget>[
+      Card(
+        child: ListTile(
+          leading: const CircleAvatar(backgroundColor: Color(0x1A0B6E69), child: Icon(Icons.directions_car, color: driverTeal)),
+          title: const Text('Vehicle listings', style: TextStyle(fontWeight: FontWeight.w900)),
+          subtitle: const Text('Add a vehicle, photos, current location and price per kilometre'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: onVehicleListings,
+        ),
+      ),
       Card(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
@@ -1433,6 +1440,8 @@ class DriverPartnerProfile extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
     Card(child:ListTile(leading:const Icon(Icons.sos,color:Colors.red),title:const Text('SOS / Emergency'),onTap:onSos)),
+    Card(child:ListTile(leading:const Icon(Icons.currency_rupee,color:driverTeal),title:const Text('Earnings'),subtitle:const Text('Completed rides, fares and net earnings'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerEarnings(user:user))))),
+    Card(child:ListTile(leading:const Icon(Icons.history,color:driverTeal),title:const Text('Ride History'),subtitle:const Text('View previous and cancelled rides'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
