@@ -508,7 +508,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       );
       final result=await callable.call({'type':'ride','id':ref.id,'pin':pin});
       final payload=result.data;
-      if(payload is! Map || payload['verified']!=true) {
+      if(payload is! Map || (payload['verified']!=true && payload['ok']!=true)) {
         throw FirebaseFunctionsException(code:'failed-precondition',message:'The server did not confirm this PIN. Please try again.');
       }
       if(mounted){
