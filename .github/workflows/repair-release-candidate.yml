@@ -4,6 +4,7 @@ on:
     branches: [fix/reported-flow-audit-2026-10-10]
     paths:
       - "lib/**"
+      - "test/**"
       - "tool/**"
       - "pubspec.yaml"
       - ".github/workflows/repair-release-candidate.yml"
