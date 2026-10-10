@@ -660,7 +660,7 @@ class DriverPartnerHome extends StatelessWidget {
             ],
           ),
         ),
-      )
+      ),
     ];
 
     if (activeRideId != null) {
