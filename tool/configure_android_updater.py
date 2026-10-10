@@ -4,7 +4,6 @@ import re
 manifest = Path("android/app/src/main/AndroidManifest.xml")
 manifest_text = manifest.read_text(encoding="utf-8")
 
-# Android 8+ requires explicit opt-in for installing packages from this app.
 if "android.permission.REQUEST_INSTALL_PACKAGES" not in manifest_text:
     marker = "<application"
     if marker not in manifest_text:
@@ -15,8 +14,6 @@ if "android.permission.REQUEST_INSTALL_PACKAGES" not in manifest_text:
         1,
     )
 
-# The package installer broadcasts the OS confirmation action to this receiver.
-# Register it independently of the FCM notification channel's configured name.
 receiver = '<receiver android:name=".MainActivity$InstallStatusReceiver" android:exported="false" />'
 if "MainActivity$InstallStatusReceiver" not in manifest_text:
     if "</application>" not in manifest_text:
@@ -55,6 +52,8 @@ required_imports = [
     "import android.net.Uri",
     "import android.os.Build",
     "import android.provider.Settings",
+    "import io.flutter.embedding.engine.FlutterEngine",
+    "import io.flutter.plugin.common.MethodChannel",
     "import java.io.File",
     "import java.io.FileInputStream",
 ]
@@ -66,17 +65,21 @@ if missing_imports:
         1,
     )
 
-class_marker = "class MainActivity : FlutterActivity() {"
-if class_marker not in kotlin:
+class_match = re.search(r"class\s+MainActivity\s*:\s*FlutterActivity\(\)\s*(\{)?", kotlin)
+if not class_match:
     raise SystemExit("Could not find MainActivity class declaration")
+# Recent Flutter templates emit a class declaration without an explicit body.
+if not class_match.group(1):
+    kotlin = kotlin[:class_match.end()] + " {\n" + kotlin[class_match.end():].rstrip() + "\n}\n"
+
 if "private val updaterChannel" not in kotlin:
-    kotlin = kotlin.replace(
-        class_marker,
-        class_marker
-        + '\n    private val updaterChannel = "' + updater_channel + '"'
-        + '\n    private val installAction = "' + install_action + '"',
-        1,
-    )
+    m = re.search(r"class\s+MainActivity\s*:\s*FlutterActivity\(\)\s*\{", kotlin)
+    if not m:
+        raise SystemExit("Could not open MainActivity class body")
+    kotlin = kotlin[:m.end()] + (
+        '\n    private val updaterChannel = "' + updater_channel + '"'
+        + '\n    private val installAction = "' + install_action + '"\n'
+    ) + kotlin[m.end():]
 
 handler = """
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updaterChannel)
@@ -97,9 +100,19 @@ handler = """
 """
 configure_marker = "super.configureFlutterEngine(flutterEngine)"
 if "MethodChannel(flutterEngine.dartExecutor.binaryMessenger, updaterChannel)" not in kotlin:
-    if configure_marker not in kotlin:
-        raise SystemExit("Could not find configureFlutterEngine insertion point")
-    kotlin = kotlin.replace(configure_marker, configure_marker + handler, 1)
+    if configure_marker in kotlin:
+        kotlin = kotlin.replace(configure_marker, configure_marker + handler, 1)
+    else:
+        configure_method = """
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+""" + handler + """
+    }
+"""
+        final_brace = kotlin.rfind("}")
+        if final_brace < 0:
+            raise SystemExit("Could not find closing brace for MainActivity")
+        kotlin = kotlin[:final_brace] + configure_method + "\n" + kotlin[final_brace:]
 
 install_method = """
     private fun installApk(path: String?, result: MethodChannel.Result) {
