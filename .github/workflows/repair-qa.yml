@@ -24,7 +24,6 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
-          cache: gradle
       - run: flutter pub get
       - name: Static analysis
         run: flutter analyze
