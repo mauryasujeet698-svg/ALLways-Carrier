@@ -34,7 +34,7 @@ jobs:
       - name: Generate Android scaffold for QA only
         run: flutter create --platforms=android --org com.allways --project-name driver_partner .
       - name: Build Driver Partner QA APK (debug, no release)
-        run: flutter build apk --debug --target-platform android-arm64 --shrink
+        run: flutter build apk --debug --target-platform android-arm64
       - name: Validate artifact
         run: |
           APK="build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk"
