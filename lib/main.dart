@@ -565,7 +565,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
   }
   @override Widget build(BuildContext context){
     final pages=[
-      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4)),
+      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4),onRequests:()=>setState(()=>tab=1)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
@@ -593,6 +593,7 @@ class DriverPartnerHome extends StatelessWidget {
   final String? activeRideId;
   final Future<void> Function(bool) onOnline;
   final VoidCallback onVehicleListings;
+  final VoidCallback onRequests;
 
   const DriverPartnerHome({
     super.key,
@@ -601,6 +602,7 @@ class DriverPartnerHome extends StatelessWidget {
     required this.activeRideId,
     required this.onOnline,
     required this.onVehicleListings,
+    required this.onRequests,
   });
 
   @override
@@ -626,47 +628,39 @@ class DriverPartnerHome extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Where are you going?',
+                'Ready for your next ride?',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 10),
-              Container(
-                height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: ivory,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search),
-                    SizedBox(width: 10),
-                    Text(
-                      'Search pickup or destination',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 6),
+              Text(
+                online
+                    ? 'Check nearby requests and accept a trip when you are ready.'
+                    : 'Go online when you are ready to receive nearby ride requests.',
+                style: const TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Recent destinations',
-                style: TextStyle(fontWeight: FontWeight.w800),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onRequests,
+                  icon: const Icon(Icons.near_me),
+                  label: const Text('View nearby ride requests'),
+                  style: FilledButton.styleFrom(backgroundColor: driverTeal),
+                ),
               ),
-              const SizedBox(height: 7),
-              const Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('Prayagraj Civil Lines')),
-                  Chip(label: Text('Railway Junction')),
-                  Chip(label: Text('Sangam')),
-                ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onVehicleListings,
+                  icon: const Icon(Icons.directions_car_outlined),
+                  label: const Text('Manage my vehicle listings'),
+                ),
               ),
             ],
           ),
         ),
-      ),
+      )
     ];
 
     if (activeRideId != null) {
