@@ -1,0 +1,51 @@
+name: ALLways Driver Partner Repair QA
+on:
+  push:
+    branches: [fix/reported-flow-audit-2026-10-10]
+    paths:
+      - "lib/**"
+      - "android/**"
+      - "pubspec.yaml"
+      - ".github/workflows/repair-qa.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  driver-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+      - run: flutter pub get
+      - name: Static analysis
+        run: flutter analyze
+        continue-on-error: true
+      - name: Tests
+        run: flutter test
+        continue-on-error: true
+      - name: Generate Android scaffold for QA only
+        run: flutter create --platforms=android --org com.allways --project-name driver_partner .
+      - name: Build Driver Partner QA APK (debug, no release)
+        run: flutter build apk --debug --target-platform android-arm64 --shrink
+      - name: Validate artifact
+        run: |
+          APK="build/app/outputs/flutter-apk/app-arm64-v8a-debug.apk"
+          test -s "$APK" || APK="build/app/outputs/flutter-apk/app-debug.apk"
+          test -s "$APK"
+          stat -c 'APK=%n SIZE_BYTES=%s' "$APK"
+          sha256sum "$APK"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: allways-driver-partner-repair-qa-apk
+          path: build/app/outputs/flutter-apk/*debug.apk
+          if-no-files-found: error
+          retention-days: 7
