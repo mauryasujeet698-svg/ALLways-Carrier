@@ -80,9 +80,10 @@ class _AllwaysUpdateGateState extends State<AllwaysUpdateGate> {
               heroTag: 'allways_update_check_${widget.repo}',
               tooltip: 'Check for updates',
               onPressed: busy ? null : () async {
+                final messenger = ScaffoldMessenger.of(context);
                 await _check();
                 if (!mounted) return;
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                messenger.showSnackBar(SnackBar(
                   content: Text(version == null
                     ? 'No update was detected. Check your connection and try again if needed.'
                     : 'ALLways update ${version!} is available at the top of the screen.'),
