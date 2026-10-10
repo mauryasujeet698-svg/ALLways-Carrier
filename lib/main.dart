@@ -1514,7 +1514,7 @@ Future<void> _editDriverPartnerProfile(BuildContext context,User user) async {
         if(cleanName.isEmpty||cleanPhone.replaceAll(RegExp(r'\D'),'').length<10){setD(()=>error='Enter your name and a valid mobile number.');return;}
         setD((){busy=true;error=null;});
         try{
-          await ref.set({'uid':user.uid,'role':'carrier','name':cleanName,'displayName':cleanName,'phone':cleanPhone,'mobileNumber':cleanPhone,'profilePhotoUrl':photoUrl,'photoUrl':photoUrl,'updatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
+          await ref.set({'uid':user.uid,'name':cleanName,'displayName':cleanName,'phone':cleanPhone,'mobileNumber':cleanPhone,'profilePhotoUrl':photoUrl,'photoUrl':photoUrl,'updatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
           await user.updateDisplayName(cleanName);
           if(photoUrl.trim().isNotEmpty)await user.updatePhotoURL(photoUrl.trim());
           if(dialogContext.mounted)Navigator.pop(dialogContext,true);
