@@ -2,7 +2,7 @@ name: ALLways Driver Partner QA Build
 
 on:
   push:
-    branches: [audit-implementation-2026-10]
+    branches: [audit-implementation-2026-10, fix/fcm-registration-reliability]
   workflow_dispatch:
 
 permissions:
@@ -14,9 +14,28 @@ concurrency:
 
 jobs:
   qa-build:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Locate Bash on self-hosted Windows runner
+        shell: powershell -ExecutionPolicy Bypass -NoProfile -File {0}
+        run: |
+          $candidates = @(
+            "$env:ProgramFiles\Git\bin",
+            "$env:ProgramFiles\Git\usr\bin",
+            "$env:LOCALAPPDATA\Programs\Git\bin"
+          )
+          $bashDirectory = $candidates | Where-Object { $_ -and (Test-Path (Join-Path $_ 'bash.exe')) } | Select-Object -First 1
+          if (-not $bashDirectory) {
+            Write-Error "Git Bash was not found. Install Git for Windows with Bash, then restart the GitHub Actions runner service."
+            exit 1
+          }
+          Write-Host "Using Git Bash from $bashDirectory"
+          Add-Content -Path $env:GITHUB_PATH -Value $bashDirectory
+
       - name: Checkout approved feature branch
         uses: actions/checkout@v4
 
@@ -25,6 +44,17 @@ jobs:
         with:
           channel: stable
           cache: true
+
+      - name: Diagnose self-hosted Android build tools
+        shell: powershell -ExecutionPolicy Bypass -NoProfile -File {0}
+        run: |
+          Write-Host "Runner: $env:RUNNER_NAME ($env:RUNNER_OS / $env:RUNNER_ARCH)"
+          Write-Host "Workspace: $env:GITHUB_WORKSPACE"
+          Get-Command flutter -ErrorAction Stop | Format-List Source
+          java -version
+          if ($env:ANDROID_HOME) { Write-Host "ANDROID_HOME=$env:ANDROID_HOME" }
+          elseif ($env:ANDROID_SDK_ROOT) { Write-Host "ANDROID_SDK_ROOT=$env:ANDROID_SDK_ROOT" }
+          else { Write-Host "Android SDK variables are not set; build step will confirm availability." }
 
       - name: Install dependencies
         run: flutter pub get
@@ -42,12 +72,14 @@ jobs:
         run: flutter build apk --debug --target-platform android-arm64
 
       - name: Check APK exists and report size
-        shell: bash
+        shell: powershell -ExecutionPolicy Bypass -NoProfile -File {0}
         run: |
-          APK="build/app/outputs/flutter-apk/app-debug.apk"
-          test -s "$APK"
-          ls -lh "$APK"
-          sha256sum "$APK"
+          $apk = Join-Path $env:GITHUB_WORKSPACE "build/app/outputs/flutter-apk/app-debug.apk"
+          if (-not (Test-Path $apk)) { throw "Expected QA APK was not created: $apk" }
+          $item = Get-Item $apk
+          if ($item.Length -le 0) { throw "QA APK exists but is empty." }
+          Write-Host ("APK size: {0:N2} MB ({1} bytes)" -f ($item.Length / 1MB), $item.Length)
+          Get-FileHash -Path $apk -Algorithm SHA256
 
       - name: Upload QA APK artifact
         uses: actions/upload-artifact@v4
