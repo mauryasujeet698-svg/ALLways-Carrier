@@ -623,71 +623,8 @@ class DriverPartnerHome extends StatelessWidget {
           onTap: onVehicleListings,
         ),
       ),
-      Card(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Where are you going?',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
-              ),
-              const SizedBox(height: 10),
-              Container(
-                height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: ivory,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search),
-                    SizedBox(width: 10),
-                    Text(
-                      'Search pickup or destination',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Recent destinations',
-                style: TextStyle(fontWeight: FontWeight.w800),
-              ),
-              const SizedBox(height: 7),
-              const Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('Prayagraj Civil Lines')),
-                  Chip(label: Text('Railway Junction')),
-                  Chip(label: Text('Sangam')),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
     ];
 
-    if (activeRideId != null) {
-      bottomItems.add(
-        Card(
-          child: ListTile(
-            leading: const Icon(Icons.navigation, color: driverTeal),
-            title: const Text(
-              'Active ride',
-              style: TextStyle(fontWeight: FontWeight.w900),
-            ),
-            subtitle: Text('#' + activeRideId!),
-            trailing: const Icon(Icons.chevron_right),
-          ),
-        ),
-      );
-    }
 
     if (online) {
       bottomItems.insert(0,Card(elevation:0,child:Padding(padding:const EdgeInsets.all(14),child:Row(children:[const CircleAvatar(backgroundColor:Color(0x1A5B1ACF),child:Icon(Icons.bolt,color:driverTeal)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('Next action',style:TextStyle(fontWeight:FontWeight.w900)),Text('Open Requests → Accept → Navigate → Complete',style:TextStyle(color:Colors.grey,fontSize:12))]))]))));
