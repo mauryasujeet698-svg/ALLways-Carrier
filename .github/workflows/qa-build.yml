@@ -16,7 +16,26 @@ jobs:
   qa-build:
     runs-on: self-hosted
     timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
     steps:
+      - name: Locate Bash on self-hosted Windows runner
+        shell: powershell
+        run: |
+          $candidates = @(
+            "$env:ProgramFiles\Git\bin",
+            "$env:ProgramFiles\Git\usr\bin",
+            "$env:LOCALAPPDATA\Programs\Git\bin"
+          )
+          $bashDirectory = $candidates | Where-Object { $_ -and (Test-Path (Join-Path $_ 'bash.exe')) } | Select-Object -First 1
+          if (-not $bashDirectory) {
+            Write-Error "Git Bash was not found. Install Git for Windows with Bash, then restart the GitHub Actions runner service."
+            exit 1
+          }
+          Write-Host "Using Git Bash from $bashDirectory"
+          Add-Content -Path $env:GITHUB_PATH -Value $bashDirectory
+
       - name: Checkout approved feature branch
         uses: actions/checkout@v4
 
@@ -27,7 +46,7 @@ jobs:
           cache: true
 
       - name: Diagnose self-hosted Android build tools
-        shell: pwsh
+        shell: powershell
         run: |
           Write-Host "Runner: $env:RUNNER_NAME ($env:RUNNER_OS / $env:RUNNER_ARCH)"
           Write-Host "Workspace: $env:GITHUB_WORKSPACE"
@@ -53,7 +72,7 @@ jobs:
         run: flutter build apk --debug --target-platform android-arm64
 
       - name: Check APK exists and report size
-        shell: pwsh
+        shell: powershell
         run: |
           $apk = Join-Path $env:GITHUB_WORKSPACE "build/app/outputs/flutter-apk/app-debug.apk"
           if (-not (Test-Path $apk)) { throw "Expected QA APK was not created: $apk" }
