@@ -24,6 +24,10 @@ const driverTeal=Color(0xFF0B6E69);
 const ivory=Color(0xFFF8F6F0);
 const _mapboxPublicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
 const _mapboxTilesUrl = 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=' + _mapboxPublicToken;
+
+// The deployed callable currently returns {ok: true}; accept the older verified key too.
+bool pinVerificationSucceeded(Object? payload) =>
+    payload is Map && (payload['ok'] == true || payload['verified'] == true);
 @pragma('vm:entry-point')
 Future<void> _background(RemoteMessage message) async { await Firebase.initializeApp(); }
 
@@ -511,7 +515,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       );
       final result=await callable.call({'type':'ride','id':ref.id,'pin':pin});
       final payload=result.data;
-      if(payload is! Map || payload['verified']!=true) {
+      if(!pinVerificationSucceeded(payload)) {
         throw FirebaseFunctionsException(code:'failed-precondition',message:'The server did not confirm this PIN. Please try again.');
       }
       if(mounted){
