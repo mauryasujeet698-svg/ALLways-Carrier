@@ -186,6 +186,22 @@ jobs:
               }
           }
           KOTLIN
+      - name: Restore official ALLways launcher branding
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/res/drawable-nodpi
+          printf '%s' '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' | base64 --decode > android/app/src/main/res/drawable-nodpi/allways_brand_icon.png
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          p = Path("android/app/src/main/AndroidManifest.xml")
+          s = p.read_text()
+          updated = re.sub(r'(<application\\b[^>]*\\bandroid:icon=")[^"]+(")', r'\\1@drawable/allways_brand_icon\\2', s, count=1, flags=re.S)
+          if updated == s:
+              raise SystemExit("Could not find launcher icon in AndroidManifest.xml")
+          p.write_text(updated)
+          PY
+
       - name: Configure native in-app updater
         run: python3 tool/configure_android_updater.py
 
@@ -230,6 +246,27 @@ jobs:
         env:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=build/symbols --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN}"
+
+      - name: Enforce 30 MB release APK limit
+        shell: bash
+        run: |
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$APK"
+          SIZE=$(stat -c%s "$APK")
+          echo "Release APK size: $SIZE bytes"
+          if [ "$SIZE" -gt 30000000 ]; then
+            echo "Release APK exceeds the 30,000,000-byte limit; refusing to publish."
+            exit 1
+          fi
+
+
+      - name: Verify final app identity
+        shell: bash
+        run: |
+          AAPT="$(find "$ANDROID_HOME/build-tools" -type f -name aapt2 | sort -V | tail -n 1)"
+          test -n "$AAPT"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep -F "package: name='com.allways.carrier'"
+          "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep -F "application-label:'ALLways Driver Partner'"
 
       - name: Extract App Version
         id: get_version
