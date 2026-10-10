@@ -1538,7 +1538,7 @@ Future<void> _requestDriverAccountDeletion(BuildContext context,User user) async
     final profile=(await FirebaseFirestore.instance.collection('ridePartners').doc(user.uid).get()).data()??{};
     await FirebaseFirestore.instance.collection('supportTickets').add({
       'requesterId':user.uid,'requesterRole':'carrier','requesterName':(profile['name']??user.displayName??user.email??'ALLways Driver Partner').toString(),
-      'requesterEmail':user.email??'','queue':'Account & Privacy Support','area':'Account','category':'Account deletion',
+      'requesterEmail':user.email??'','queue':'Service Support','area':'Account','category':'Account deletion',
       'subcategory':'Account deletion request','subject':'Driver partner account deletion request',
       'message':'I request deletion of my ALLways Driver Partner account and associated personal data, subject to any required transaction/safety record retention.',
       'status':'open','priority':'normal','createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp(),
