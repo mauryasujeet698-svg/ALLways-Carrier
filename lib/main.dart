@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'privacy_policy_screen.dart';
 import 'package:flutter/services.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -507,7 +508,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       );
       final result=await callable.call({'type':'ride','id':ref.id,'pin':pin});
       final payload=result.data;
-      if(payload is! Map || payload['verified']!=true) {
+      if(payload is! Map || (payload['verified']!=true && payload['ok']!=true)) {
         throw FirebaseFunctionsException(code:'failed-precondition',message:'The server did not confirm this PIN. Please try again.');
       }
       if(mounted){
@@ -565,7 +566,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
   }
   @override Widget build(BuildContext context){
     final pages=[
-      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4)),
+      DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4),onRequests:()=>setState(()=>tab=1),onActiveRide:()=>setState(()=>tab=2)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
       DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
@@ -593,6 +594,8 @@ class DriverPartnerHome extends StatelessWidget {
   final String? activeRideId;
   final Future<void> Function(bool) onOnline;
   final VoidCallback onVehicleListings;
+  final VoidCallback onRequests;
+  final VoidCallback onActiveRide;
 
   const DriverPartnerHome({
     super.key,
@@ -601,6 +604,8 @@ class DriverPartnerHome extends StatelessWidget {
     required this.activeRideId,
     required this.onOnline,
     required this.onVehicleListings,
+    required this.onRequests,
+    required this.onActiveRide,
   });
 
   @override
@@ -611,57 +616,40 @@ class DriverPartnerHome extends StatelessWidget {
 
     final bottomItems = <Widget>[
       Card(
-        child: ListTile(
-          leading: const CircleAvatar(backgroundColor: Color(0x1A0B6E69), child: Icon(Icons.directions_car, color: driverTeal)),
-          title: const Text('Vehicle listings', style: TextStyle(fontWeight: FontWeight.w900)),
-          subtitle: const Text('Add a vehicle, photos, current location and price per kilometre'),
-          trailing: const Icon(Icons.chevron_right),
-          onTap: onVehicleListings,
-        ),
-      ),
-      Card(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 15, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                'Where are you going?',
+                'Ready for your next ride?',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900),
               ),
-              const SizedBox(height: 10),
-              Container(
-                height: 50,
-                padding: const EdgeInsets.symmetric(horizontal: 14),
-                decoration: BoxDecoration(
-                  color: ivory,
-                  borderRadius: BorderRadius.circular(15),
-                ),
-                child: const Row(
-                  children: [
-                    Icon(Icons.search),
-                    SizedBox(width: 10),
-                    Text(
-                      'Search pickup or destination',
-                      style: TextStyle(color: Colors.grey),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: 6),
+              Text(
+                online
+                    ? 'Check nearby requests and accept a trip when you are ready.'
+                    : 'Go online when you are ready to receive nearby ride requests.',
+                style: const TextStyle(color: Colors.black54),
               ),
               const SizedBox(height: 12),
-              const Text(
-                'Recent destinations',
-                style: TextStyle(fontWeight: FontWeight.w800),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: onRequests,
+                  icon: const Icon(Icons.near_me),
+                  label: const Text('View nearby ride requests'),
+                  style: FilledButton.styleFrom(backgroundColor: driverTeal),
+                ),
               ),
-              const SizedBox(height: 7),
-              const Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  Chip(label: Text('Prayagraj Civil Lines')),
-                  Chip(label: Text('Railway Junction')),
-                  Chip(label: Text('Sangam')),
-                ],
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onVehicleListings,
+                  icon: const Icon(Icons.directions_car_outlined),
+                  label: const Text('Manage my vehicle listings'),
+                ),
               ),
             ],
           ),
@@ -680,6 +668,7 @@ class DriverPartnerHome extends StatelessWidget {
             ),
             subtitle: Text('#' + activeRideId!),
             trailing: const Icon(Icons.chevron_right),
+            onTap: onActiveRide,
           ),
         ),
       );
@@ -1199,8 +1188,21 @@ class _ActiveRideState extends State<ActiveRide> {
                             ],
                           ),
                         ),
+                        if (navigationTarget != null)
+                          IconButton(
+                            tooltip: status == 'started' ? 'Navigate to destination' : 'Navigate to passenger pickup',
+                            onPressed: () async {
+                              final target = navigationTarget;
+                              final uri = Uri.parse(
+                                'https://www.google.com/maps/dir/?api=1&destination=${target.latitude},${target.longitude}&travelmode=driving',
+                              );
+                              await launchUrl(uri, mode: LaunchMode.externalApplication);
+                            },
+                            icon: const Icon(Icons.navigation),
+                          ),
                         if (phone.isNotEmpty)
                           IconButton(
+                            tooltip: 'Call passenger',
                             onPressed: () => widget.onCall(phone),
                             icon: const Icon(Icons.call),
                           ),
@@ -1470,6 +1472,7 @@ class DriverPartnerProfile extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.currency_rupee,color:driverTeal),title:const Text('Earnings'),subtitle:const Text('Completed rides, fares and net earnings'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerEarnings(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.history,color:driverTeal),title:const Text('Ride History'),subtitle:const Text('View previous and cancelled rides'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
+    Card(child:ListTile(leading:const Icon(Icons.privacy_tip_outlined),title:const Text('Privacy Policy & Terms'),subtitle:const Text('How ALLways uses account, location and trip information.'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>const AllwaysPrivacyPolicyScreen())))),
     Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
   ]);
 }
