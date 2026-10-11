@@ -220,8 +220,31 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Validate production map tile provider
+        env:
+          MAP_TILE_URL: ${{ vars.MAP_TILE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${MAP_TILE_URL:-}" ]]; then
+            echo "::error::Set repository Actions variable MAP_TILE_URL to a contracted or self-hosted tile endpoint before publishing a production APK."
+            exit 1
+          fi
+          case "$MAP_TILE_URL" in
+            https://*) ;;
+            *) echo "::error::MAP_TILE_URL must use HTTPS."; exit 1 ;;
+          esac
+          case "$MAP_TILE_URL" in
+            *tile.openstreetmap.org*|*cartocdn.com*)
+              echo "::error::Public OpenStreetMap/CARTO tile endpoints are not approved for production-scale ALLways ride/delivery navigation."
+              exit 1
+              ;;
+          esac
+
       - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=build/symbols
+        env:
+          MAP_TILE_URL: ${{ vars.MAP_TILE_URL }}
+        run: flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=build/symbols --dart-define=MAP_TILE_URL="${MAP_TILE_URL}"
 
       - name: Enforce under-25 MB release APK limit
         shell: bash
