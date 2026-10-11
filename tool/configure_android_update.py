@@ -131,7 +131,7 @@ class MainActivity : FlutterActivity() {
             val flags = PendingIntent.FLAG_UPDATE_CURRENT or
                 (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) PendingIntent.FLAG_MUTABLE else 0)
             val pending = PendingIntent.getBroadcast(this, sessionId, callback, flags)
-            session.commit(pending.intentSender)
+            openSession.commit(pending.intentSender)
             result.success("started")
         } catch (e: Exception) {
             try { session?.abandon() } catch (_: Exception) {}
