@@ -90,7 +90,8 @@ class PartnerShiftService {
       'acceptRide',
       options: HttpsCallableOptions(timeout: const Duration(seconds: 15)),
     ).call({'rideId': rideId});
-    if (result.data is! Map || result.data['ok'] != true) {
+    final payload = result.data;
+    if (payload is! Map || payload['ok'] != true) {
       throw FirebaseFunctionsException(code: 'failed-precondition', message: 'The server did not confirm the ride assignment.');
     }
   }
