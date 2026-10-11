@@ -100,7 +100,7 @@ jobs:
         run: echo "version=$(sed -n 's/^version: *//p' pubspec.yaml | cut -d+ -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Stage updater APK and calculate its digest
-        if: ${ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
         id: update-digest
         shell: bash
         run: |
@@ -109,11 +109,11 @@ jobs:
           echo "sha256=$(sha256sum release-assets/allways-driver-partner-latest.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
       - name: Publish in-app update release
-        if: ${ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: allways-latest
-          name: ALLways Driver Partner v${ steps.app-version.outputs.version }}
+          name: ALLways Driver Partner v${{ steps.app-version.outputs.version }}
           body: |
             ALLways Driver Partner in-app update.
             The app downloads the signed APK, verifies its SHA-256 digest and opens Android's install confirmation.
@@ -122,13 +122,13 @@ jobs:
           fail_on_unmatched_files: true
 
       - name: Publish real-time update manifest to Firestore
-        if: ${ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
         env:
-          FIREBASE_SERVICE_ACCOUNT_JSON: ${ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
-          APP_VERSION: ${ steps.app-version.outputs.version }}
-          APP_UPDATE_driverPartnerAppUpdate: driverPartnerAppUpdate
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          APP_VERSION: ${{ steps.app-version.outputs.version }}
+          APP_UPDATE_DOC: driverPartnerAppUpdate
           APP_APK_URL: https://github.com/mauryasujeet698-svg/ALLways-Carrier/releases/download/allways-latest/allways-driver-partner-latest.apk
-          APK_SHA256: ${ steps.update-digest.outputs.sha256 }}
+          APK_SHA256: ${{ steps.update-digest.outputs.sha256 }}
           APP_UPDATE_NOTES: ALLways Driver Partner stability, security and performance improvements.
         shell: bash
         run: |
