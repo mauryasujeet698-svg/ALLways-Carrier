@@ -3,6 +3,12 @@ name: ALLways Driver Partner QA Build
 on:
   push:
     branches: [audit-implementation-2026-10, fix/fcm-registration-reliability]
+  pull_request:
+    paths:
+      - "lib/**"
+      - "tool/**"
+      - "pubspec.yaml"
+      - ".github/workflows/qa-build.yml"
   workflow_dispatch:
     inputs:
       publish_update:
