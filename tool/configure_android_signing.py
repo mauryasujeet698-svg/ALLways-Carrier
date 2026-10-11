@@ -52,7 +52,7 @@ def main() -> None:
         if listing.returncode != 0:
             raise SystemExit("Could not inspect the keystore using the configured store password.")
         aliases = [value.strip() for value in re.findall(
-            r"(?ms)^Alias name:\\s*(.+?)\\s*$.*?^Entry type:\\s*PrivateKeyEntry\\s*$",
+            r"(?ms)^Alias name:\s*(.+?)\s*$.*?^Entry type:\s*PrivateKeyEntry\s*$",
             listing.stdout,
         )]
         if len(aliases) != 1:
