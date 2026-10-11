@@ -325,7 +325,7 @@ class DriverPartnerShell extends StatefulWidget{
   @override State<DriverPartnerShell> createState()=>_DriverPartnerShellState();
 }
 class _DriverPartnerShellState extends State<DriverPartnerShell>{
-  int tab=0;bool online=false;bool notificationsEnabled=true;Position? position;String vehicle='bike';String? activeRideId;String? _shiftSessionId;DateTime? _lastLocationProjectionAt;double matchingRadiusKm=7;
+  int tab=0;bool online=false;bool notificationsEnabled=true;Position? position;String vehicle='bike';String? activeRideId;String? _shiftSessionId;DateTime? _lastLocationProjectionAt; DateTime? _lastProfileLocationAt;double matchingRadiusKm=7;
   StreamSubscription<Position>? locationSub;
   StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
   StreamSubscription<String>? _tokenRefreshSub;
@@ -610,13 +610,17 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         return;
       }
       // Compatibility path until the Redis/H3 location service is deployed.
-      await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).update({
-        'carrierLat': p.latitude,
-        'carrierLng': p.longitude,
-        'carrierLocationUpdatedAt': FieldValue.serverTimestamp(),
-        'lastLocationAt': FieldValue.serverTimestamp(),
-        'lastSeenAt': FieldValue.serverTimestamp(),
-      });
+      if (_lastProfileLocationAt == null ||
+          now.difference(_lastProfileLocationAt!) >= const Duration(seconds: 120)) {
+        _lastProfileLocationAt = now;
+        await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).update({
+          'carrierLat': p.latitude,
+          'carrierLng': p.longitude,
+          'carrierLocationUpdatedAt': FieldValue.serverTimestamp(),
+          'lastLocationAt': FieldValue.serverTimestamp(),
+          'lastSeenAt': FieldValue.serverTimestamp(),
+        });
+      }
       final id = activeRideId;
       if (id != null) {
         if (_lastLocationProjectionAt != null &&
