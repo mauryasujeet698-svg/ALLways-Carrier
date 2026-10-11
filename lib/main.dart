@@ -361,6 +361,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         },SetOptions(merge:true));
         if(mounted)setState(()=>activeRideId=null);
         await activeRideSub?.cancel();
+        if (online) await _startLocation(forOnline: true);
       }
     });
   }
