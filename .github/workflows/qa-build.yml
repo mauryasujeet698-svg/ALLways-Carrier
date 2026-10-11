@@ -65,7 +65,8 @@ jobs:
           test -s "$apk"
           size=$(stat -c%s "$apk")
           max_size=$((25 * 1024 * 1024))
-          echo "Release APK size: $(awk "BEGIN {printf \"%.2f\", $size/1024/1024}") MiB ($size bytes)"
+          mb=$(awk -v bytes="$size" 'BEGIN {printf "%.2f", bytes/1024/1024}')
+          echo "Release APK size: ${mb} MiB (${size} bytes)"
           if [ "$size" -gt "$max_size" ]; then
             echo "::error::APK exceeds the hard 25 MiB maximum by $((size - max_size)) bytes. Do not distribute this build."
             exit 1
