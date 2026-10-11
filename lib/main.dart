@@ -530,14 +530,21 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
     var p=await Geolocator.checkPermission();if(p==LocationPermission.denied)p=await Geolocator.requestPermission();
     return p!=LocationPermission.denied&&p!=LocationPermission.deniedForever;
   }
-  Future<void> _startLocation()async{
-    if(!await _permission())return;
-    try{
-      final LocationSettings settings = Platform.isAndroid && online
+  Future<void> _startLocation({bool forOnline = false}) async {
+    if (!await _permission()) return;
+    try {
+      final trackingOnline = online || forOnline;
+      final activeTrip = activeRideId != null;
+      final LocationSettings settings = Platform.isAndroid && trackingOnline
           ? AndroidSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 10,
-              intervalDuration: const Duration(seconds: 10),
+              // Use lower-power tracking while waiting; increase accuracy only
+              // for a live trip. The foreground service keeps online tracking
+              // visible to the driver and compliant with Android background rules.
+              accuracy: activeTrip ? LocationAccuracy.high : LocationAccuracy.medium,
+              distanceFilter: activeTrip ? 10 : 50,
+              intervalDuration: activeTrip
+                  ? const Duration(seconds: 10)
+                  : const Duration(seconds: 30),
               foregroundNotificationConfig: const ForegroundNotificationConfig(
                 notificationTitle: 'ALLways live ride tracking',
                 notificationText: 'ALLways is sharing your location while you are online or on an active ride.',
@@ -546,11 +553,28 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
                 setOngoing: true,
               ),
             )
-          : const LocationSettings(accuracy: LocationAccuracy.high,distanceFilter:10);
-      final first=await Geolocator.getCurrentPosition(locationSettings:settings);position=first;await _savePosition(first);
+          : const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              distanceFilter: 50,
+            );
+      final first = await Geolocator.getCurrentPosition(locationSettings: settings);
+      position = first;
+      await _savePosition(first);
       await locationSub?.cancel();
-      locationSub=Geolocator.getPositionStream(locationSettings:settings).listen((p){position=p;_savePosition(p);if(mounted)setState((){});});
-    }catch(_){}
+      locationSub = Geolocator.getPositionStream(locationSettings: settings).listen(
+        (p) {
+          position = p;
+          _savePosition(p);
+          if (mounted) setState(() {});
+        },
+        onError: (Object error) {
+          debugPrint('Driver location stream failed: $error');
+        },
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Driver location startup failed: $error');
+      debugPrint(stackTrace.toString());
+    }
   }
   Future<void> _savePosition(Position p)async{
     try{
@@ -569,7 +593,13 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       }
     }
     if(value&&!await _permission()){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Location permission is required before going online.')));return;}
-    if(value)await _startLocation();else await locationSub?.cancel();
+    if (value) {
+      await _startLocation(forOnline: true);
+    } else {
+      await locationSub?.cancel();
+      locationSub = null;
+      position = null;
+    }
     final data={'status':value?'online':'offline','availableForRides':value,'isOnline':value,'statusUpdatedAt':FieldValue.serverTimestamp(),'vehicleType':vehicle};
     await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set(data,SetOptions(merge:true));
     if(mounted)setState(()=>online=value);
@@ -591,6 +621,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
       });
       if(mounted){setState(()=>activeRideId=doc.id);setState(()=>tab=2);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted. Opening live tracking.')));}
+      if (online) await _startLocation(forOnline: true);
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
   }
   Future<void> _startRide(DocumentReference ref) async {
@@ -634,6 +665,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       final callable=FirebaseFunctions.instanceFor(region: 'asia-south1').httpsCallable('completeRide');
       await callable.call({'rideId':ref.id});
       if(mounted){setState(()=>activeRideId=null);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride completed.')));}
+      if (online) await _startLocation(forOnline: true);
     }on FirebaseFunctionsException catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not complete ride.')));
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}
