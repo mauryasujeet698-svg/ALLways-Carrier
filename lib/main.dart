@@ -343,7 +343,19 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       _watchActiveRide();
       vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
       try{final rs=await FirebaseFirestore.instance.collection('settings').doc('ride').get();final v=double.tryParse((rs.data()?['matchingRadiusKm']??'7').toString())??7;if(v>0&&v<=50)matchingRadiusKm=v;}catch(_){}
-      if(online) await _startLocation();
+      if (online) {
+        // Refresh the server-issued shift session on app restart before GPS resumes.
+        _shiftSessionId = await PartnerShiftService.setShift(role: 'carrier', online: true);
+        final started = await _startLocation();
+        if (!started) {
+          await locationSub?.cancel();
+          locationSub = null;
+          position = null;
+          await PartnerShiftService.setShift(role: 'carrier', online: false);
+          online = false;
+          _shiftSessionId = null;
+        }
+      }
     }catch(_){}
     if(mounted)setState((){});
   }
@@ -579,6 +591,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
         latitude: p.latitude,
         longitude: p.longitude,
         shiftSessionId: _shiftSessionId,
+        activeJobId: activeRideId,
       );
       final now = DateTime.now();
       if (indexed) {
