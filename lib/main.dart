@@ -735,7 +735,15 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
     await FirebaseAuth.instance.signOut();
   }
 
-  Future<void> _reject(DocumentReference ref)async{await ref.update({'rejectedBy':FieldValue.arrayUnion([widget.user.uid]),'updatedAt':FieldValue.serverTimestamp()});}
+  Future<void> _reject(DocumentReference ref) async {
+    try {
+      await ref.update({'rejected': true, 'rejectedAt': FieldValue.serverTimestamp()});
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not dismiss this offer. Please retry.')),
+      );
+    }
+  }
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
   Future<void> _accept(QueryDocumentSnapshot<Map<String,dynamic>> doc) async {
     try {
@@ -1162,7 +1170,7 @@ class RideRequests extends StatelessWidget{
   const RideRequests({super.key,required this.user,required this.online,required this.position,required this.vehicle,required this.activeRideId,required this.matchingRadiusKm,required this.onAccept,required this.onReject});
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
   @override Widget build(BuildContext c)=>StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
-    stream:FirebaseFirestore.instance.collection('autoRideRequests').where('status',isEqualTo:'searching').snapshots(),
+    stream:FirebaseFirestore.instance.collection('rideOffers').doc(user.uid).collection('requests').where('status',isEqualTo:'searching').snapshots(),
     builder:(context,s){
       if(!online)return const Center(child:Text('Go online to receive ride requests.'));
       if(activeRideId!=null&&activeRideId!.isNotEmpty)return const Center(child:Padding(padding:EdgeInsets.all(28),child:Text('You already have an active ride. Complete it before accepting another ride.',textAlign:TextAlign.center)));
@@ -1172,7 +1180,9 @@ class RideRequests extends StatelessWidget{
       for(final d in s.data!.docs){
         final x=d.data();
         final st=(x['status']??'').toString().trim().toLowerCase();
-        if(st!='searching')continue;
+        if(st!='searching' || x['rejected']==true)continue;
+        final expires=x['offerExpiresAt'];
+        if(expires is Timestamp && expires.toDate().isBefore(DateTime.now()))continue;
         if(x['customerActive']==false)continue;
         if(x['cancelledAt']!=null||x['completedAt']!=null||x['endedAt']!=null||x['rejectedAt']!=null||x['expiredAt']!=null)continue;
         final assignedUid=(x['driverUid']??x['carrierUid']??x['deliveryPartnerUid']??x['assignedPartnerId']??'').toString().trim();
