@@ -137,7 +137,7 @@ jobs:
           APP_APK_URL: https://github.com/mauryasujeet698-svg/ALLways-Carrier/releases/download/allways-latest/allways-driver-partner-latest.apk
           APK_SHA256: ${{ steps.update-digest.outputs.sha256 }}
           APP_UPDATE_NOTES: ALLways Driver Partner stability, security and performance improvements.
-          APP_UPDATE_MANDATORY: false
+          APP_UPDATE_MANDATORY: 'false'
         shell: bash
         run: |
           mkdir -p /tmp/allways-update-publisher
