@@ -4,9 +4,15 @@ on:
   push:
     branches: [audit-implementation-2026-10, fix/fcm-registration-reliability]
   workflow_dispatch:
+    inputs:
+      publish_update:
+        description: Publish this tested APK to the allways-latest update release (requires stable signing secrets)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: allways-driver-partner-qa-${{ github.ref }}
@@ -34,6 +40,18 @@ jobs:
 
       - name: Generate Android project scaffolding for QA build
         run: flutter create --platforms=android --org com.allways --project-name carrier .
+
+      - name: Configure native APK updater and foreground notifications
+        run: python3 tool/configure_android_update.py --package com.allways.carrier --channel com.allways.carrier/apk_installer --label "ALLways Driver Partner"
+
+      - name: Configure stable release signing
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: python3 tool/configure_android_signing.py
 
       - name: Bound Gradle memory for hosted runner
         shell: bash
@@ -72,6 +90,24 @@ jobs:
             exit 1
           fi
           sha256sum "$apk"
+
+      - name: Read application version
+        id: app-version
+        shell: bash
+        run: echo "version=$(sed -n 's/^version: *//p' pubspec.yaml | cut -d+ -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish in-app update release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: allways-latest
+          name: ALLways Driver Partner v${{ steps.app-version.outputs.version }}
+          body: |
+            ALLways Driver Partner in-app update.
+            Install through the app's UPDATE prompt. Keep the same signing key for every release.
+          files: build/app/outputs/flutter-apk/app-release.apk
+          make_latest: true
+          fail_on_unmatched_files: true
 
       - name: Upload release candidate APK artifact
         uses: actions/upload-artifact@v4
