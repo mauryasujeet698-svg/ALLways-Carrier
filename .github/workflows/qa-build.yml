@@ -55,21 +55,27 @@ jobs:
       - name: Unit and widget tests
         run: flutter test
 
-      - name: Build QA debug APK
-        run: flutter build apk --debug --target-platform android-arm64
+      - name: Build optimized ARM64 release APK
+        run: flutter build apk --release --target-platform android-arm64 --shrink
 
-      - name: Validate APK and report size
+      - name: Enforce 25 MiB APK maximum and record checksum
+        shell: bash
         run: |
-          apk="build/app/outputs/flutter-apk/app-debug.apk"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$apk"
           size=$(stat -c%s "$apk")
-          echo "QA APK size: $((size / 1024 / 1024)) MiB ($size bytes)"
+          max_size=$((25 * 1024 * 1024))
+          echo "Release APK size: $(awk "BEGIN {printf \"%.2f\", $size/1024/1024}") MiB ($size bytes)"
+          if [ "$size" -gt "$max_size" ]; then
+            echo "::error::APK exceeds the hard 25 MiB maximum by $((size - max_size)) bytes. Do not distribute this build."
+            exit 1
+          fi
           sha256sum "$apk"
 
-      - name: Upload QA APK artifact
+      - name: Upload release candidate APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: allways-driver-partner-qa-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: allways-driver-partner-release-candidate-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 7
