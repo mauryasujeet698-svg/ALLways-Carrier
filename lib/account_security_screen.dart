@@ -27,10 +27,10 @@ class AccountSecurityScreen extends StatefulWidget {
 class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   bool _submitting = false;
 
-  Future<void> _submitRequest() async {
+  Future<void> _submitRequest({String initialType = 'grievance'}) async {
     final formKey = GlobalKey<FormState>();
     final details = TextEditingController();
-    String requestType = 'grievance';
+    String requestType = initialType;
     final result = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
@@ -161,6 +161,18 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
                 'Location is needed for dispatch only while you are on duty or completing an active job. '
                 'Going off duty stops the app location stream and asks the server to clear live location.',
               ),
+            ),
+          ),
+          Card(
+            child: ListTile(
+              leading: Icon(Icons.delete_outline, color: widget.accent),
+              title: const Text('Request account deletion'),
+              subtitle: const Text(
+                'Submit an account and data erasure request for review. Your account is not deleted immediately; '
+                'ALLways must verify the request and check active jobs and lawful retention requirements.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _submitting ? null : () => _submitRequest(initialType: 'erasure'),
             ),
           ),
           Card(
