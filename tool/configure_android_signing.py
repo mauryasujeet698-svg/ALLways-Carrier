@@ -4,6 +4,7 @@ from __future__ import annotations
 import base64
 import os
 import re
+import subprocess
 from pathlib import Path
 
 def required(name: str) -> str:
@@ -23,7 +24,7 @@ def insert_after_plugins(text: str, code: str) -> str:
 def main() -> None:
     encoded = required("ANDROID_KEYSTORE_BASE64")
     store_password = required("ANDROID_KEYSTORE_PASSWORD")
-    alias = required("ANDROID_KEY_ALIAS")
+    alias = os.environ.get("ANDROID_KEY_ALIAS", "").strip()
     key_password = required("ANDROID_KEY_PASSWORD")
     try:
         key = base64.b64decode(encoded, validate=True)
@@ -39,6 +40,27 @@ def main() -> None:
         keystore.chmod(0o600)
     except OSError:
         pass
+
+    if not alias:
+        try:
+            listing = subprocess.run(
+                ["keytool", "-list", "-v", "-keystore", str(keystore), "-storepass", store_password],
+                capture_output=True, text=True, check=False,
+            )
+        except OSError as exc:
+            raise SystemExit("keytool is unavailable; cannot determine the keystore alias.") from exc
+        if listing.returncode != 0:
+            raise SystemExit("Could not inspect the keystore using the configured store password.")
+        aliases = [value.strip() for value in re.findall(
+            r"(?ms)^Alias name:\\s*(.+?)\\s*$.*?^Entry type:\\s*PrivateKeyEntry\\s*$",
+            listing.stdout,
+        )]
+        if len(aliases) != 1:
+            raise SystemExit(
+                f"Expected exactly one private-key alias in the keystore, found {len(aliases)}. "
+                "Set ANDROID_KEY_ALIAS as a GitHub Actions secret if the keystore contains multiple keys."
+            )
+        alias = aliases[0]
 
     def prop(v: str) -> str:
         return v.replace("\\", "\\\\").replace(":", "\\:").replace("=", "\\=").replace(" ", "\\ ")
