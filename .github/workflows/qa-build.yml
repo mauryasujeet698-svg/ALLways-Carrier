@@ -35,6 +35,17 @@ jobs:
       - name: Generate Android project scaffolding for QA build
         run: flutter create --platforms=android --org com.allways --project-name carrier .
 
+      - name: Bound Gradle memory for hosted runner
+        shell: bash
+        run: |
+          if grep -q '^org.gradle.jvmargs=' android/gradle.properties; then
+            sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx3G -XX:MaxMetaspaceSize=1G -XX:ReservedCodeCacheSize=256m -XX:+HeapDumpOnOutOfMemoryError|' android/gradle.properties
+          else
+            echo 'org.gradle.jvmargs=-Xmx3G -XX:MaxMetaspaceSize=1G -XX:ReservedCodeCacheSize=256m -XX:+HeapDumpOnOutOfMemoryError' >> android/gradle.properties
+          fi
+          grep -q '^org.gradle.workers.max=' android/gradle.properties || echo 'org.gradle.workers.max=2' >> android/gradle.properties
+          grep -q '^org.gradle.parallel=' android/gradle.properties || echo 'org.gradle.parallel=false' >> android/gradle.properties
+
       - name: Install dependencies
         run: flutter pub get
 
