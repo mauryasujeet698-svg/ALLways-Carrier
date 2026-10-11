@@ -203,7 +203,7 @@ class MainActivity : FlutterActivity() {
                 val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     manager.createNotificationChannel(
-                        NotificationChannel(UPDATE_CHANNEL_ID, "ALLways Updates", NotificationManager.IMPORTANCE_HIGH)
+                        NotificationChannel(MainActivity.UPDATE_CHANNEL_ID, "ALLways Updates", NotificationManager.IMPORTANCE_HIGH)
                     )
                 }
                 val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
