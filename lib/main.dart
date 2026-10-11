@@ -23,7 +23,10 @@ import 'shift_service.dart';
 
 const driverTeal=Color(0xFF0B6E69);
 const ivory=Color(0xFFF8F6F0);
-const _openStreetMapTilesUrl = 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+const _openStreetMapTilesUrl = String.fromEnvironment(
+  'MAP_TILE_URL',
+  defaultValue: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+);
 @pragma('vm:entry-point')
 Future<void> _background(RemoteMessage message) async { await Firebase.initializeApp(); }
 
@@ -994,7 +997,7 @@ class DriverPartnerHome extends StatelessWidget {
                 maxZoom: 19,
                 userAgentPackageName: 'com.allways.carrier',
               ),
-                const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors'), TextSourceAttribution('© CARTO')]),
+                const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
               if (position != null)
                 MarkerLayer(
                   markers: [
@@ -1089,7 +1092,7 @@ class DriverPartnerHome extends StatelessWidget {
               maxZoom: 19,
               userAgentPackageName: 'com.allways.carrier',
             ),
-                const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors'), TextSourceAttribution('© CARTO')]),
+                const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
             if (position != null)
               MarkerLayer(
                 markers: [
@@ -1438,7 +1441,7 @@ class _ActiveRideState extends State<ActiveRide> {
                   maxZoom: 19,
                   userAgentPackageName: 'com.allways.carrier',
                 ),
-                const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors'), TextSourceAttribution('© CARTO')]),
+                const RichAttributionWidget(attributions: [TextSourceAttribution('© OpenStreetMap contributors')]),
                 if (route.isNotEmpty)
                   PolylineLayer(
                     polylines: [
