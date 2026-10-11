@@ -118,6 +118,7 @@ jobs:
             ALLways Driver Partner in-app update.
             The app downloads the signed APK, verifies its SHA-256 digest and opens Android's install confirmation.
           files: release-assets/allways-driver-partner-latest.apk
+          overwrite_files: true
           make_latest: true
           fail_on_unmatched_files: true
 
