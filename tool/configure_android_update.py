@@ -41,7 +41,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.core.app.NotificationCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -120,10 +119,11 @@ class MainActivity : FlutterActivity() {
             params.setSize(apk.length())
             val installer = packageManager.packageInstaller
             val sessionId = installer.createSession(params)
-            session = installer.openSession(sessionId)
-            session.openWrite("package", 0, apk.length()).use { output ->
+            val openSession = installer.openSession(sessionId)
+            session = openSession
+            openSession.openWrite("package", 0, apk.length()).use { output ->
                 FileInputStream(apk).use { input -> input.copyTo(output, 1024 * 1024) }
-                session.fsync(output)
+                openSession.fsync(output)
             }
             val callback = Intent(this, InstallStatusReceiver::class.java)
                 .setAction(INSTALL_ACTION)
@@ -145,7 +145,7 @@ class MainActivity : FlutterActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val manager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             manager.createNotificationChannel(
-                NotificationChannel(UPDATE_CHANNEL_ID, "ALLways Updates", NotificationManager.IMPORTANCE_HIGH).apply {
+                NotificationChannel(MainActivity.UPDATE_CHANNEL_ID, "ALLways Updates", NotificationManager.IMPORTANCE_HIGH).apply {
                     description = "ALLways delivery, ride and app-update notifications"
                     enableVibration(true)
                 }
@@ -187,7 +187,7 @@ class MainActivity : FlutterActivity() {
 
     class InstallStatusReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action != INSTALL_ACTION) return
+            if (intent.action != MainActivity.INSTALL_ACTION) return
             val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
             if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
                 val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -207,7 +207,7 @@ class MainActivity : FlutterActivity() {
                     )
                 }
                 val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    Notification.Builder(context, UPDATE_CHANNEL_ID)
+                    Notification.Builder(context, MainActivity.UPDATE_CHANNEL_ID)
                 } else {
                     @Suppress("DEPRECATION")
                     Notification.Builder(context)
