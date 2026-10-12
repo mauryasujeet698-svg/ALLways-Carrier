@@ -1606,16 +1606,9 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
       final cleanPhone=phone.text.replaceAll(RegExp(r'\D'),'');
       final cleanPrice=num.tryParse(price.text.trim())??0;
       if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
-      Position? currentPosition;
-      try {
-        if (await Geolocator.isLocationServiceEnabled()) {
-          var permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
-          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-            currentPosition = await Geolocator.getCurrentPosition();
-          }
-        }
-      } catch (_) {}
+      // Vehicle listings are publicly readable for discovery; do not publish a
+      // driver's precise GPS position. City and pincode below are sufficient
+      // for discovery until a privacy-preserving geo-query backend is deployed.
       final vehicleRef=FirebaseFirestore.instance.collection('vehicles').doc();
       await FirebaseFirestore.instance.collection('vehicleOwnerContacts').doc(vehicleRef.id).set({
         'vehicleId':vehicleRef.id,
@@ -1629,8 +1622,6 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
         'imageUrl':imageUrl.text.trim(),'vehicleImageUrl':imageUrl.text.trim(),
         'allowNegotiation':negotiate,'status':'available','listingStatus':'active','available':true,
         'manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
-        'currentLocation':currentPosition==null?null:{'latitude':currentPosition.latitude,'longitude':currentPosition.longitude},
-        'latitude':currentPosition?.latitude,'longitude':currentPosition?.longitude,
         'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp(),
       });
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Vehicle listed successfully.')));
