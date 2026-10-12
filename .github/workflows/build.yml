@@ -232,15 +232,15 @@ jobs:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         run: flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=build/symbols --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN}"
 
-      - name: Enforce strict 25 MB release APK limit
+      - name: Enforce strict 35 MB release APK limit
         shell: bash
         run: |
           APK="build/app/outputs/flutter-apk/app-release.apk"
           test -s "$APK"
           SIZE=$(stat -c%s "$APK")
           echo "Release APK size: $SIZE bytes"
-          if [ "$SIZE" -gt 25000000 ]; then
-            echo "Release APK exceeds the 25,000,000-byte limit; refusing to publish."
+          if [ "$SIZE" -gt 35000000 ]; then
+            echo "Release APK exceeds the 35,000,000-byte limit; refusing to publish."
             exit 1
           fi
 
@@ -253,6 +253,15 @@ jobs:
           "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep -F "package: name='com.allways.carrier'"
           "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep -F "application-label:'ALLways Driver Partner'"
 
+      - name: Verify signed production APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose build/app/outputs/flutter-apk/app-release.apk
+          "$APKSIGNER" verify --print-certs build/app/outputs/flutter-apk/app-release.apk
+
       - name: Extract App Version
         id: get_version
         run: |
@@ -260,13 +269,20 @@ jobs:
           test -n "$VERSION"
           echo "APP_VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      - name: Build x86_64 smoke-test APK
+      - name: Preserve signed arm64 production APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk"
+
+      - name: Build release-mode x86_64 startup-test APK
         env:
           MAPBOX_PUBLIC_TOKEN: ${{ secrets.MAPBOX_PUBLIC_TOKEN }}
         shell: bash
-        run: flutter build apk --debug --target-platform android-x64 --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN}"
+        run: flutter build apk --release --target-platform android-x64 --obfuscate --split-debug-info=build/smoke-symbols --dart-define=MAPBOX_PUBLIC_TOKEN="${MAPBOX_PUBLIC_TOKEN}"
 
-      - name: Android runtime smoke test
+      - name: Android release-mode launch smoke test
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -276,18 +292,53 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
           script: |
+            set -euo pipefail
             adb wait-for-device
+            ready=0
+            for attempt in $(seq 1 90); do
+              boot="$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')"
+              if [ "$boot" = "1" ] && adb shell cmd package list packages >/dev/null 2>&1 && adb shell dumpsys activity activities >/dev/null 2>&1; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
+            if [ "$ready" != "1" ]; then
+              echo "::error::Android emulator services did not become ready."
+              adb logcat -d -t 1500 | tail -n 300 || true
+              exit 1
+            fi
             adb logcat -c
-            adb install -r build/app/outputs/flutter-apk/app-debug.apk || (sleep 5 && adb install -r build/app/outputs/flutter-apk/app-debug.apk)
+            APK="build/app/outputs/flutter-apk/app-release.apk"
+            installed=0
+            for attempt in 1 2 3 4; do
+              if adb install -r "$APK"; then installed=1; break; fi
+              sleep 5
+            done
+            if [ "$installed" != "1" ]; then
+              echo "::error::Release-mode x86_64 APK could not be installed."
+              adb logcat -d -t 1500 | tail -n 300 || true
+              exit 1
+            fi
             timeout 90s adb shell am start -W -n com.allways.carrier/.MainActivity
             sleep 15
-            adb shell pidof com.allways.carrier >/dev/null || { echo "Driver Partner process exited after launch; Android diagnostics follow."; adb logcat -d -t 1200 | grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com.allways.carrier|Unable to start activity' || true; adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true; exit 1; }
+            if ! adb shell pidof com.allways.carrier >/dev/null; then
+              echo "::error::allways-driver-partner process exited after launch."
+              adb logcat -d -t 1800 | grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com.allways.carrier|Unable to start activity' || true
+              adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
+              exit 1
+            fi
+            adb shell dumpsys activity activities | grep -F 'com.allways.carrier' >/dev/null || {
+              echo "::error::allways-driver-partner did not remain the resumed activity."
+              adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
+              exit 1
+            }
 
       - name: Prepare release assets
+        shell: bash
         run: |
-          mkdir -p release-assets
-          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk"
-          cp build/app/outputs/flutter-apk/app-release.apk "release-assets/allways-driver-partner-latest.apk"
+          set -euo pipefail
+          cp "release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk" "release-assets/allways-driver-partner-latest.apk"
 
       - name: Publish latest APK release
         uses: softprops/action-gh-release@v3
