@@ -2,6 +2,8 @@ name: ALLways Driver Partner
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -291,46 +293,7 @@ jobs:
           cores: 2
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
-          script: |
-            set -eu
-            adb wait-for-device
-            adb logcat -c || true
-            APK="build/app/outputs/flutter-apk/app-release.apk"
-            installed=0
-            for attempt in $(seq 1 18); do
-              echo "Release APK install attempt $attempt/18"
-              if adb install -r "$APK"; then
-                installed=1
-                break
-              fi
-              # Let the Android package manager settle after emulator cold boot.
-              sleep 10
-            done
-            if [ "$installed" != "1" ]; then
-              echo "::error::Release-mode x86_64 APK could not be installed after retries."
-              adb devices -l || true
-              adb shell getprop sys.boot_completed || true
-              adb logcat -d -t 2000 | tail -n 350 || true
-              exit 1
-            fi
-            echo "Starting allways-driver-partner release-mode build."
-            if ! timeout 90s adb shell am start -W -n com.allways.carrier/.MainActivity; then
-              echo "::error::Android failed to start com.allways.carrier/.MainActivity."
-              adb logcat -d -t 2500 | grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com.allways.carrier|Unable to start activity|ActivityTaskManager' | tail -n 150 || true
-              adb shell dumpsys activity activities | grep -E 'mResumedActivity|topResumedActivity' || true
-              exit 1
-            fi
-            sleep 20
-            if ! adb shell pidof com.allways.carrier >/dev/null; then
-              echo "::error::allways-driver-partner process exited after launch."
-              adb logcat -d -t 2500 | grep -E 'FATAL EXCEPTION|AndroidRuntime|Process: com.allways.carrier|Unable to start activity' | tail -n 150 || true
-              exit 1
-            fi
-            if adb logcat -d -t 2500 | grep -E 'FATAL EXCEPTION.*com.allways.carrier|Process: com.allways.carrier.*died'; then
-              echo "::error::allways-driver-partner startup logs contain a fatal crash."
-              exit 1
-            fi
-            echo "allways-driver-partner release-mode launch check passed."
+          script: bash .github/scripts/android-release-smoke.sh com.allways.carrier "ALLways Driver Partner"
       - name: Prepare release assets
         shell: bash
         run: |
@@ -338,6 +301,7 @@ jobs:
           cp "release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk" "release-assets/allways-driver-partner-latest.apk"
 
       - name: Publish latest APK release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v3
         with:
           tag_name: allways-latest
