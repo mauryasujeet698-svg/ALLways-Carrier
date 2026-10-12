@@ -1616,8 +1616,15 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
           }
         }
       } catch (_) {}
-      await FirebaseFirestore.instance.collection('vehicles').add({
-        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Driver Partner','ownerPhone':cleanPhone,
+      final vehicleRef=FirebaseFirestore.instance.collection('vehicles').doc();
+      await FirebaseFirestore.instance.collection('vehicleOwnerContacts').doc(vehicleRef.id).set({
+        'vehicleId':vehicleRef.id,
+        'ownerUid':widget.user.uid,
+        'phone':cleanPhone,
+        'updatedAt':FieldValue.serverTimestamp(),
+      },SetOptions(merge:true));
+      await vehicleRef.set({
+        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Driver Partner',
         'category':category.value,'vehicleType':category.value,'price':cleanPrice,'pricePerKm':cleanPrice,'pricingUnit':'km','capacity':num.tryParse(capacity.text.trim())??0,
         'imageUrl':imageUrl.text.trim(),'vehicleImageUrl':imageUrl.text.trim(),
         'allowNegotiation':negotiate,'status':'available','listingStatus':'active','available':true,
