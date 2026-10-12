@@ -3,10 +3,22 @@ name: ALLways Driver Partner QA Build
 on:
   push:
     branches: [audit-implementation-2026-10]
+  pull_request:
+    paths:
+      - "lib/**"
+      - "tool/**"
+      - "pubspec.yaml"
+      - ".github/workflows/qa-build.yml"
   workflow_dispatch:
+    inputs:
+      publish_update:
+        description: Publish this tested APK to the allways-latest update release (requires stable signing secrets)
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: allways-driver-partner-qa-${{ github.ref }}
@@ -20,11 +32,46 @@ jobs:
       - name: Checkout approved feature branch
         uses: actions/checkout@v4
 
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
+
+      - name: Generate Android project scaffolding for QA build
+        run: flutter create --platforms=android --org com.allways --project-name carrier .
+
+      - name: Configure native APK updater and foreground notifications
+        run: python3 tool/configure_android_update.py --package com.allways.carrier --channel com.allways.carrier/apk_installer --label "ALLways Driver Partner"
+
+      - name: Configure stable release signing
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ALLWAYS_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ALLWAYS_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ALLWAYS_KEY_PASSWORD }}
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT_JSON" ]; then echo "::error::Set FIREBASE_SERVICE_ACCOUNT_JSON before publishing an in-app update."; exit 1; fi
+          python3 tool/configure_android_signing.py
+
+      - name: Bound Gradle memory for hosted runner
+        shell: bash
+        run: |
+          if grep -q '^org.gradle.jvmargs=' android/gradle.properties; then
+            sed -i 's|^org.gradle.jvmargs=.*|org.gradle.jvmargs=-Xmx3G -XX:MaxMetaspaceSize=1G -XX:ReservedCodeCacheSize=256m -XX:+HeapDumpOnOutOfMemoryError|' android/gradle.properties
+          else
+            echo 'org.gradle.jvmargs=-Xmx3G -XX:MaxMetaspaceSize=1G -XX:ReservedCodeCacheSize=256m -XX:+HeapDumpOnOutOfMemoryError' >> android/gradle.properties
+          fi
+          grep -q '^org.gradle.workers.max=' android/gradle.properties || echo 'org.gradle.workers.max=2' >> android/gradle.properties
+          grep -q '^org.gradle.parallel=' android/gradle.properties || echo 'org.gradle.parallel=false' >> android/gradle.properties
 
       - name: Install dependencies
         run: flutter pub get
@@ -35,24 +82,74 @@ jobs:
       - name: Unit and widget tests
         run: flutter test
 
-      - name: Generate Android project scaffolding for QA build
-        run: flutter create --platforms=android --org com.allways --project-name driver_partner .
+      - name: Build optimized ARM64 release APK
+        run: flutter build apk --release --target-platform android-arm64 --shrink
 
-      - name: Build QA debug APK (no release signing)
-        run: flutter build apk --debug --target-platform android-arm64
-
-      - name: Check APK exists and report size
+      - name: Enforce 25 MiB APK maximum and record checksum
         shell: bash
         run: |
-          APK="build/app/outputs/flutter-apk/app-debug.apk"
-          test -s "$APK"
-          ls -lh "$APK"
-          sha256sum "$APK"
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          test -s "$apk"
+          size=$(stat -c%s "$apk")
+          max_size=25000000
+          mb=$(awk -v bytes="$size" 'BEGIN {printf "%.2f", bytes/1024/1024}')
+          echo "Release APK size: ${mb} MiB (${size} bytes)"
+          if [ "$size" -ge "$max_size" ]; then
+            echo "::error::APK reaches or exceeds the 25,000,000-byte limit by $((size - max_size)) bytes. Do not distribute this build."
+            exit 1
+          fi
+          sha256sum "$apk"
 
-      - name: Upload QA APK artifact
+      - name: Read application version
+        id: app-version
+        shell: bash
+        run: |
+          echo "version=$(sed -n 's/^version: *//p' pubspec.yaml | cut -d+ -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Stage updater APK and calculate its digest
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        id: update-digest
+        shell: bash
+        run: |
+          mkdir -p release-assets
+          cp build/app/outputs/flutter-apk/app-release.apk release-assets/allways-driver-partner-latest.apk
+          echo "sha256=$(sha256sum release-assets/allways-driver-partner-latest.apk | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish in-app update release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: allways-latest
+          name: ALLways Driver Partner v${{ steps.app-version.outputs.version }}
+          body: |
+            ALLways Driver Partner in-app update.
+            The app downloads the signed APK, verifies its SHA-256 digest and opens Android's install confirmation.
+          files: release-assets/allways-driver-partner-latest.apk
+          overwrite_files: true
+          make_latest: true
+          fail_on_unmatched_files: true
+
+      - name: Publish real-time update manifest to Firestore
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          APP_VERSION: ${{ steps.app-version.outputs.version }}
+          APP_UPDATE_DOC: driverPartnerAppUpdate
+          APP_APK_URL: https://github.com/mauryasujeet698-svg/ALLways-Carrier/releases/download/allways-latest/allways-driver-partner-latest.apk
+          APK_SHA256: ${{ steps.update-digest.outputs.sha256 }}
+          APP_UPDATE_NOTES: ALLways Driver Partner stability, security and performance improvements.
+          APP_UPDATE_MANDATORY: 'false'
+        shell: bash
+        run: |
+          mkdir -p /tmp/allways-update-publisher
+          npm --prefix /tmp/allways-update-publisher init -y >/dev/null
+          npm --prefix /tmp/allways-update-publisher install --no-audit --no-fund firebase-admin@13
+          NODE_PATH=/tmp/allways-update-publisher/node_modules node tool/publish_update_manifest.cjs
+
+      - name: Upload release candidate APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: allways-driver-partner-qa-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
+          name: allways-driver-partner-release-candidate-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
           retention-days: 7

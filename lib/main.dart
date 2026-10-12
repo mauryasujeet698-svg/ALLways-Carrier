@@ -18,6 +18,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'update_service.dart';
 import 'support_screen.dart';
+import 'account_security_screen.dart';
+import 'shift_service.dart';
 
 const driverTeal=Color(0xFF0B6E69);
 const ivory=Color(0xFFF8F6F0);
@@ -49,7 +51,7 @@ class AllwaysDriverPartnerApp extends StatelessWidget {
       textTheme:GoogleFonts.poppinsTextTheme(),
       cardTheme:const CardThemeData(color:Colors.white,elevation:0,margin:EdgeInsets.zero),
     ),
-    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-Carrier',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-driver-partner-latest.apk',child:AuthGate()),
+    home:const AllwaysUpdateGate(repo:'mauryasujeet698-svg/ALLways-Carrier',packageChannel:'com.allways.carrier/apk_installer',assetName:'allways-driver-partner-latest.apk',manifestDoc:'driverPartnerAppUpdate',child:AuthGate()),
   );
 }
 
@@ -323,21 +325,37 @@ class DriverPartnerShell extends StatefulWidget{
   @override State<DriverPartnerShell> createState()=>_DriverPartnerShellState();
 }
 class _DriverPartnerShellState extends State<DriverPartnerShell>{
-  int tab=0;bool online=false;Position? position;String vehicle='bike';String? activeRideId;double matchingRadiusKm=7;
+  int tab=0;bool online=false;bool notificationsEnabled=true;Position? position;String vehicle='bike';String? activeRideId;String? _shiftSessionId;DateTime? _lastLocationProjectionAt; DateTime? _lastProfileLocationAt;double matchingRadiusKm=7;
   StreamSubscription<Position>? locationSub;
   StreamSubscription<DocumentSnapshot<Map<String,dynamic>>>? activeRideSub;
+  StreamSubscription<String>? _tokenRefreshSub;
+  StreamSubscription<RemoteMessage>? _messageSub;
+  StreamSubscription<RemoteMessage>? _openedMessageSub;
   @override void initState(){super.initState();_load();_notifications();}
-  @override void dispose(){locationSub?.cancel();activeRideSub?.cancel();super.dispose();}
+  @override void dispose(){locationSub?.cancel();activeRideSub?.cancel();_tokenRefreshSub?.cancel();_messageSub?.cancel();_openedMessageSub?.cancel();super.dispose();}
   Future<void> _load()async{
     try{
       final r=await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).get();
       final x=r.data()??{};
-      online=(x['status']??'offline').toString().toLowerCase()=='online';
+      online=(x['shiftStatus']??'').toString().toLowerCase()=='on_duty';
+      _shiftSessionId=(x['shiftSessionId']??'').toString().trim().isEmpty?null:(x['shiftSessionId']??'').toString();
       activeRideId=(x['activeRideId']??'').toString();if(activeRideId!.isEmpty)activeRideId=null;
       _watchActiveRide();
       vehicle=(x['vehicleType']??'bike').toString().toLowerCase();if(vehicle=='two_wheeler')vehicle='bike';
       try{final rs=await FirebaseFirestore.instance.collection('settings').doc('ride').get();final v=double.tryParse((rs.data()?['matchingRadiusKm']??'7').toString())??7;if(v>0&&v<=50)matchingRadiusKm=v;}catch(_){}
-      if(online) await _startLocation();
+      if (online) {
+        // Refresh the server-issued shift session on app restart before GPS resumes.
+        _shiftSessionId = await PartnerShiftService.setShift(role: 'carrier', online: true);
+        final started = await _startLocation();
+        if (!started) {
+          await locationSub?.cancel();
+          locationSub = null;
+          position = null;
+          await PartnerShiftService.setShift(role: 'carrier', online: false);
+          online = false;
+          _shiftSessionId = null;
+        }
+      }
     }catch(_){}
     if(mounted)setState((){});
   }
@@ -349,143 +367,409 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
     activeRideSub=ref.snapshots().listen((snap)async{
       final status=(snap.data()?['status']??'').toString().toLowerCase();
       if(const {'cancelled','completed','rejected','expired'}.contains(status)){
-        await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({
-          'status':'online',
-          'availableForRides':true,
-          'isOnline':true,
-          'activeRideId':null,
-          'statusUpdatedAt':FieldValue.serverTimestamp(),
-        },SetOptions(merge:true));
+        // The backend owns shift and assignment state. The client only stops
+        // local trip tracking; it must never re-enable its shift by editing a profile.
         if(mounted)setState(()=>activeRideId=null);
         await activeRideSub?.cancel();
+        if(online)await _startLocation(forOnline:true);
       }
     });
   }
-  Future<void> _notifications()async{
-    try{
-      final p=await SharedPreferences.getInstance();
-      if(p.getBool('notifications_enabled')==false)return;
-      final s=await FirebaseMessaging.instance.requestPermission(alert:true,badge:true,sound:true);
-      if(s.authorizationStatus==AuthorizationStatus.denied)return;
-      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(alert:true,badge:true,sound:true);
+  Future<void> _notifications() async {
+    final prefs = await SharedPreferences.getInstance();
+    final enabled = prefs.getBool('notifications_enabled') ?? true;
+    if (mounted) setState(() => notificationsEnabled = enabled);
+    if (!enabled) return;
+
+    NotificationSettings settings;
+    try {
+      settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+    } catch (error, stackTrace) {
+      debugPrint('Driver notification permission failed: ' + error.toString());
+      debugPrint(stackTrace.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Notifications could not be initialized. Check your connection and try again.')),
+        );
+      }
+      return;
+    }
+
+    if (settings.authorizationStatus == AuthorizationStatus.denied) {
+      await prefs.setBool('notifications_enabled', false);
+      if (mounted) setState(() => notificationsEnabled = false);
+      return;
+    }
+
+    try {
+      await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
       await FirebaseMessaging.instance.subscribeToTopic('all_users');
       await FirebaseMessaging.instance.subscribeToTopic('carriers');
-      await p.setBool('notifications_enabled',true);
+      await prefs.setBool('notifications_enabled', true);
+      if (mounted) setState(() => notificationsEnabled = true);
+    } catch (error, stackTrace) {
+      debugPrint('Driver notification topic/configuration failed: ' + error.toString());
+      debugPrint(stackTrace.toString());
+      // Continue setting up the device listeners even if a topic subscription fails.
+    }
 
-      Future<void> saveToken(String? t)async{
-        if(t==null||t.isEmpty)return;
-        final data={
-          'uid':widget.user.uid,
-          'token':t,
-          'role':'carrier',
-          'platform':'mobile',
-          'notificationsEnabled':true,
-          'notificationPreferences':{'travelUpdates':true,'offers':true,'announcements':true},
-          'updatedAt':FieldValue.serverTimestamp(),
-        };
-        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).collection('tokens').doc(t).set(data,SetOptions(merge:true));
-        await FirebaseFirestore.instance.collection('fcmTokens').doc(widget.user.uid).set(data,SetOptions(merge:true));
+    Future<void> saveToken(String? token) async {
+      if (token == null || token.isEmpty) return;
+      // Firestore rules allow a user to write only to fcmTokens/{uid}/tokens/{token}.
+      // Writing the parent fcmTokens/{uid} document is denied and used to abort
+      // initialization before onMessage/onTokenRefresh handlers were attached.
+      await FirebaseFirestore.instance
+          .collection('fcmTokens')
+          .doc(widget.user.uid)
+          .collection('tokens')
+          .doc(token)
+          .set({
+        'uid': widget.user.uid,
+        'token': token,
+        'role': 'carrier',
+        'platform': 'android',
+        'notificationsEnabled': true,
+        'notificationPreferences': {
+          'travelUpdates': true,
+          'offers': true,
+          'announcements': true,
+        },
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+    }
+
+    await _tokenRefreshSub?.cancel();
+    _tokenRefreshSub = FirebaseMessaging.instance.onTokenRefresh.listen((token) async {
+      try {
+        await saveToken(token);
+      } catch (error, stackTrace) {
+        debugPrint('Driver FCM token refresh write failed: ' + error.toString());
+        debugPrint(stackTrace.toString());
       }
+    });
 
+    try {
       await saveToken(await FirebaseMessaging.instance.getToken());
-      FirebaseMessaging.instance.onTokenRefresh.listen(saveToken);
-      FirebaseMessaging.onMessage.listen((RemoteMessage message){
-        if(!mounted)return;
-        HapticFeedback.vibrate();
-        SystemSound.play(SystemSoundType.alert);
-        try {
-          const MethodChannel('allways_notifications').invokeMethod('showNotification', {
-            'title': message.notification?.title ?? message.data['title'] ?? 'ALLways',
-            'body': message.notification?.body ?? message.data['body'] ?? message.data['message'] ?? 'You have a new ALLways update.',
-          });
-        } catch (_) {}
-        final title=message.notification?.title??message.data['title']??'ALLways';
-        final body=message.notification?.body??message.data['body']??'';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content:Text(body.isEmpty?title:'$title: $body'),
-          duration:const Duration(seconds:4),
-        ));
-      });
-      Future<void> openRideFromMessage(RemoteMessage message) async {
-        final rideId=(message.data['rideId']??'').toString().trim();
-        if(rideId.isEmpty)return;
-        final ride=await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
-        if(!ride.exists || (ride.data()?['driverUid']??'').toString()!=widget.user.uid)return;
-        if(mounted)setState((){activeRideId=rideId;tab=2;});
+    } catch (error, stackTrace) {
+      debugPrint('Driver FCM token registration failed: ' + error.toString());
+      debugPrint(stackTrace.toString());
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Push registration failed. Ride requests may not alert until this is resolved.')),
+        );
       }
-      FirebaseMessaging.onMessageOpenedApp.listen(openRideFromMessage);
-      final initialMessage=await FirebaseMessaging.instance.getInitialMessage();
-      if(initialMessage!=null)await openRideFromMessage(initialMessage);
-    }catch(_){}
+    }
+
+    await _messageSub?.cancel();
+    _messageSub = FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      if (!mounted) return;
+      HapticFeedback.vibrate();
+      SystemSound.play(SystemSoundType.alert);
+      const MethodChannel('allways_notifications').invokeMethod('showNotification', {
+        'title': message.notification?.title ?? message.data['title'] ?? 'ALLways',
+        'body': message.notification?.body ?? message.data['body'] ?? message.data['message'] ?? 'You have a new ALLways update.',
+      }).catchError((Object error) {
+        debugPrint('Driver foreground notification display failed: ' + error.toString());
+      });
+      final title = message.notification?.title ?? message.data['title'] ?? 'ALLways';
+      final body = message.notification?.body ?? message.data['body'] ?? '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(body.isEmpty ? title : title + ': ' + body), duration: const Duration(seconds: 4)),
+      );
+    });
+
+    Future<void> openRideFromMessage(RemoteMessage message) async {
+      final rideId = (message.data['rideId'] ?? '').toString().trim();
+      if (rideId.isEmpty) return;
+      try {
+        final ride = await FirebaseFirestore.instance.collection('autoRideRequests').doc(rideId).get();
+        if (!ride.exists || (ride.data()?['driverUid'] ?? '').toString() != widget.user.uid) return;
+        if (mounted) setState(() { activeRideId = rideId; tab = 2; });
+      } catch (error, stackTrace) {
+        debugPrint('Driver notification tap routing failed: ' + error.toString());
+        debugPrint(stackTrace.toString());
+      }
+    }
+
+    await _openedMessageSub?.cancel();
+    _openedMessageSub = FirebaseMessaging.onMessageOpenedApp.listen((message) {
+      openRideFromMessage(message);
+    });
+    final initialMessage = await FirebaseMessaging.instance.getInitialMessage();
+    if (initialMessage != null) await openRideFromMessage(initialMessage);
+  }
+
+  Future<void> _setNotifications(bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('notifications_enabled', value);
+    if (!value) {
+      try {
+        await FirebaseMessaging.instance.unsubscribeFromTopic('all_users');
+        await FirebaseMessaging.instance.unsubscribeFromTopic('carriers');
+        final token = await FirebaseMessaging.instance.getToken();
+        if (token != null && token.isNotEmpty) {
+          await FirebaseFirestore.instance
+              .collection('fcmTokens')
+              .doc(widget.user.uid)
+              .collection('tokens')
+              .doc(token)
+              .delete();
+        }
+      } catch (error, stackTrace) {
+        debugPrint('Driver notification disable cleanup failed: ' + error.toString());
+        debugPrint(stackTrace.toString());
+      }
+      await _tokenRefreshSub?.cancel();
+      await _messageSub?.cancel();
+      await _openedMessageSub?.cancel();
+      if (mounted) setState(() => notificationsEnabled = false);
+      return;
+    }
+    if (mounted) setState(() => notificationsEnabled = true);
+    await _notifications();
   }
   Future<bool> _permission()async{
     if(!await Geolocator.isLocationServiceEnabled())return false;
     var p=await Geolocator.checkPermission();if(p==LocationPermission.denied)p=await Geolocator.requestPermission();
     return p!=LocationPermission.denied&&p!=LocationPermission.deniedForever;
   }
-  Future<void> _startLocation()async{
-    if(!await _permission())return;
-    try{
-      final LocationSettings settings = Platform.isAndroid && online
+  Future<bool> _startLocation({bool forOnline = false}) async {
+    if (!await _permission()) return false;
+    try {
+      final trackingOnline = online || forOnline;
+      final activeTrip = activeRideId != null;
+      final LocationSettings settings = Platform.isAndroid && trackingOnline
           ? AndroidSettings(
-              accuracy: LocationAccuracy.high,
-              distanceFilter: 10,
-              intervalDuration: const Duration(seconds: 10),
+              accuracy: activeTrip ? LocationAccuracy.high : LocationAccuracy.medium,
+              distanceFilter: activeTrip ? 10 : 50,
+              intervalDuration: activeTrip ? const Duration(seconds: 10) : const Duration(seconds: 30),
               foregroundNotificationConfig: const ForegroundNotificationConfig(
                 notificationTitle: 'ALLways live ride tracking',
-                notificationText: 'ALLways is sharing your location while you are online or on an active ride.',
+                notificationText: 'Location is shared only while on duty or completing an active ride.',
                 notificationChannelName: 'ALLways Live Ride Tracking',
                 enableWakeLock: true,
                 setOngoing: true,
               ),
             )
-          : const LocationSettings(accuracy: LocationAccuracy.high,distanceFilter:10);
-      final first=await Geolocator.getCurrentPosition(locationSettings:settings);position=first;await _savePosition(first);
+          : const LocationSettings(accuracy: LocationAccuracy.medium, distanceFilter: 50);
+      final first = await Geolocator.getCurrentPosition(locationSettings: settings);
+      position = first;
       await locationSub?.cancel();
-      locationSub=Geolocator.getPositionStream(locationSettings:settings).listen((p){position=p;_savePosition(p);if(mounted)setState((){});});
-    }catch(_){}
+      await _savePosition(first);
+      locationSub = Geolocator.getPositionStream(locationSettings: settings).listen(
+        (p) {
+          if (!online && activeRideId == null) return;
+          position = p;
+          _savePosition(p);
+          if (mounted) setState(() {});
+        },
+        onError: (Object error) {
+          debugPrint('Driver location stream failed: $error');
+        },
+      );
+      return true;
+    } catch (error, stackTrace) {
+      debugPrint('Driver location startup failed: $error');
+      debugPrint(stackTrace.toString());
+      return false;
+    }
   }
-  Future<void> _savePosition(Position p)async{
-    try{
-      await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set({'carrierLat':p.latitude,'carrierLng':p.longitude,'carrierLocationUpdatedAt':FieldValue.serverTimestamp(),'lastLocationAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-      final id=activeRideId;
-      if(id!=null)await FirebaseFirestore.instance.collection('autoRideRequests').doc(id).set({'driverLat':p.latitude,'driverLng':p.longitude,'driverLocationUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-    }catch(_){}
+
+  Future<void> _savePosition(Position p) async {
+    if (!online && activeRideId == null) return;
+    try {
+      final indexed = await PartnerShiftService.updateLocation(
+        role: 'carrier',
+        latitude: p.latitude,
+        longitude: p.longitude,
+        shiftSessionId: _shiftSessionId,
+        activeJobId: activeRideId,
+      );
+      final now = DateTime.now();
+      if (indexed) {
+        // The location service is the high-frequency index. Keep only a small
+        // Firestore projection for the existing in-trip customer map.
+        final id = activeRideId;
+        if (id == null || id.isEmpty) return;
+        if (_lastLocationProjectionAt != null &&
+            now.difference(_lastLocationProjectionAt!) < const Duration(seconds: 15)) return;
+        _lastLocationProjectionAt = now;
+        await FirebaseFirestore.instance.collection('autoRideRequests').doc(id).update({
+          'driverLat': p.latitude,
+          'driverLng': p.longitude,
+          'driverLocationUpdatedAt': FieldValue.serverTimestamp(),
+        });
+        return;
+      }
+      // Compatibility path until the Redis/H3 location service is deployed.
+      if (_lastProfileLocationAt == null ||
+          now.difference(_lastProfileLocationAt!) >= const Duration(seconds: 120)) {
+        _lastProfileLocationAt = now;
+        await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).update({
+          'carrierLat': p.latitude,
+          'carrierLng': p.longitude,
+          'carrierLocationUpdatedAt': FieldValue.serverTimestamp(),
+          'lastLocationAt': FieldValue.serverTimestamp(),
+          'lastSeenAt': FieldValue.serverTimestamp(),
+        });
+      }
+      final id = activeRideId;
+      if (id != null) {
+        if (_lastLocationProjectionAt != null &&
+            now.difference(_lastLocationProjectionAt!) < const Duration(seconds: 15)) return;
+        _lastLocationProjectionAt = now;
+        await FirebaseFirestore.instance.collection('autoRideRequests').doc(id).update({
+          'driverLat': p.latitude,
+          'driverLng': p.longitude,
+          'driverLocationUpdatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      // A failed location write must not change the server's duty/assignment state.
+      debugPrint('Driver location update failed: $error');
+    }
   }
-  Future<void> _setOnline(bool value)async{
-    if(value){
-      final profile = await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).get();
-      final approval = (profile.data()?['approvalStatus'] ?? '').toString().toLowerCase();
-      if (approval.isNotEmpty && approval != 'approved') {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Admin approval is required before going online.')));
+
+  Future<void> _setOnline(bool value) async {
+    if (value == online) return;
+    if (value && activeRideId != null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('An active ride is already in progress.')),
+      );
+      return;
+    }
+    if (value) {
+      try {
+        final profile = await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).get();
+        final approval = (profile.data()?['approvalStatus'] ?? '').toString().toLowerCase();
+        if (approval != 'approved') {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Admin approval is required before going online.')),
+          );
+          return;
+        }
+        if (!await _permission()) {
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission is required before going online.')),
+          );
+          return;
+        }
+        _shiftSessionId = await PartnerShiftService.setShift(role: 'carrier', online: true);
+        if (!mounted) return;
+        setState(() => online = true);
+        final started = await _startLocation(forOnline: true);
+        if (!started || position == null || locationSub == null) {
+          await locationSub?.cancel();
+          locationSub = null;
+          position = null;
+          setState(() => online = false);
+          _shiftSessionId = null;
+          await PartnerShiftService.setShift(role: 'carrier', online: false);
+          if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location could not start, so your shift was closed. Check GPS and try again.')),
+          );
+        }
+      } catch (error) {
+        await locationSub?.cancel();
+        locationSub = null;
+        position = null;
+        _shiftSessionId = null;
+        if (mounted) setState(() => online = false);
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+        );
+      }
+      return;
+    }
+
+    if (activeRideId != null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Complete or resolve your active ride before ending your shift.')),
+      );
+      return;
+    }
+    // Stop the device sensor stream immediately; then ask the server to close
+    // the shift and remove live coordinates. If the network fails, the stream
+    // stays stopped and the server stale-shift job is the recovery path.
+    await locationSub?.cancel();
+    locationSub = null;
+    position = null;
+    _shiftSessionId = null;
+    if (mounted) setState(() => online = false);
+    try {
+      await PartnerShiftService.setShift(role: 'carrier', online: false);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Location stopped on this device. Reconnect and retry ending your shift so the server can confirm it.')),
+      );
+    }
+  }
+
+  Future<void> _signOut() async {
+    if (activeRideId != null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please complete or resolve the active ride before signing out.')),
+      );
+      return;
+    }
+    await locationSub?.cancel();
+    locationSub = null;
+    position = null;
+    if (online) {
+      if (mounted) setState(() => online = false);
+      try {
+        await PartnerShiftService.setShift(role: 'carrier', online: false);
+        _shiftSessionId = null;
+      } catch (_) {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not confirm that your shift ended. Stay signed in and retry while connected.')),
+        );
+        if (mounted) setState(() => online = true);
         return;
       }
     }
-    if(value&&!await _permission()){if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Location permission is required before going online.')));return;}
-    if(value)await _startLocation();else await locationSub?.cancel();
-    final data={'status':value?'online':'offline','availableForRides':value,'isOnline':value,'statusUpdatedAt':FieldValue.serverTimestamp(),'vehicleType':vehicle};
-    await FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid).set(data,SetOptions(merge:true));
-    if(mounted)setState(()=>online=value);
+    await FirebaseAuth.instance.signOut();
   }
-  Future<void> _reject(DocumentReference ref)async{await ref.update({'rejectedBy':FieldValue.arrayUnion([widget.user.uid]),'updatedAt':FieldValue.serverTimestamp()});}
+
+  Future<void> _reject(DocumentReference ref) async {
+    try {
+      await ref.update({'rejected': true, 'rejectedAt': FieldValue.serverTimestamp()});
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not dismiss this offer. Please retry.')),
+      );
+    }
+  }
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
-  Future<void> _accept(QueryDocumentSnapshot<Map<String,dynamic>> doc)async{
-    try{
-      await FirebaseFirestore.instance.runTransaction((tx)async{
-        final latest=await tx.get(doc.reference);final x=latest.data()??{};
-        if((x['status']??'').toString().toLowerCase()!='searching')throw Exception('Ride already accepted.');
-        final p=await tx.get(FirebaseFirestore.instance.collection('ridePartners').doc(widget.user.uid));final profile=p.data()??{};
-        final existingActive=(profile['activeRideId']??'').toString().trim();
-        final partnerStatus=(profile['status']??'').toString().toLowerCase();
-        if(existingActive.isNotEmpty||partnerStatus=='on_trip')throw Exception('Complete your current ride before accepting another ride.');
-        final requested=(x['rideType']??'bike').toString().toLowerCase();final mine=(profile['vehicleType']??vehicle).toString().toLowerCase();final normalized=mine=='two_wheeler'?'bike':mine;
-        if(requested!=normalized)throw Exception('This ride is for a different vehicle type.');
-        tx.update(doc.reference,{'status':'accepted','driverUid':widget.user.uid,'driverName':profile['name']??widget.user.displayName??'ALLways Driver Partner','driverPhone':profile['phone']??profile['mobileNumber']??widget.user.phoneNumber??'','driverVehicleType':normalized,'acceptedAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp()});
-        tx.set(p.reference,{'status':'on_trip','availableForRides':false,'activeRideId':doc.id,'statusUpdatedAt':FieldValue.serverTimestamp()},SetOptions(merge:true));
-      });
-      if(mounted){setState(()=>activeRideId=doc.id);setState(()=>tab=2);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride accepted. Opening live tracking.')));}
-    }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString().replaceFirst('Exception: ',''))));}
+  Future<void> _accept(QueryDocumentSnapshot<Map<String,dynamic>> doc) async {
+    try {
+      await PartnerShiftService.acceptRide(rideId: doc.id);
+      if (mounted) {
+        setState(() {
+          activeRideId = doc.id;
+          tab = 2;
+        });
+        _watchActiveRide();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Ride accepted. Opening live tracking.')),
+        );
+      }
+      if (online) await _startLocation(forOnline: true);
+    } catch (error) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(error.toString().replaceFirst('Exception: ', ''))),
+      );
+    }
   }
+
   Future<void> _startRide(DocumentReference ref) async {
     final pinController=TextEditingController();
     try{
@@ -507,7 +791,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       );
       final result=await callable.call({'type':'ride','id':ref.id,'pin':pin});
       final payload=result.data;
-      if(payload is! Map || payload['verified']!=true) {
+      if(payload is! Map || (payload['ok']!=true && payload['verified']!=true)) {
         throw FirebaseFunctionsException(code:'failed-precondition',message:'The server did not confirm this PIN. Please try again.');
       }
       if(mounted){
@@ -527,6 +811,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       final callable=FirebaseFunctions.instanceFor(region: 'asia-south1').httpsCallable('completeRide');
       await callable.call({'rideId':ref.id});
       if(mounted){setState(()=>activeRideId=null);ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Ride completed.')));}
+      if (online) await _startLocation(forOnline: true);
     }on FirebaseFunctionsException catch(e){
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.message??'Could not complete ride.')));
     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(e.toString())));}
@@ -568,7 +853,7 @@ class _DriverPartnerShellState extends State<DriverPartnerShell>{
       DriverPartnerHome(online:online,position:position,activeRideId:activeRideId,onOnline:_setOnline,onVehicleListings:()=>setState(()=>tab=4)),
       RideRequests(user:widget.user,online:online,position:position,vehicle:vehicle,activeRideId:activeRideId,matchingRadiusKm:matchingRadiusKm,onAccept:_accept,onReject:_reject),
       ActiveRide(rideId:activeRideId,position:position,onCall:_call,onStart:_startRide,onComplete:_complete),
-      DriverPartnerProfile(user:widget.user,vehicle:vehicle,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),),
+      DriverPartnerProfile(user:widget.user,vehicle:vehicle,notificationsEnabled:notificationsEnabled,onNotifications:_setNotifications,onVehicle:_vehicleDialog,onSos:_sos,onSupport:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>DriverPartnerSupportScreen(user:widget.user))),onSignOut:_signOut),
       DriverPartnerVehiclePage(user:widget.user,onRideVehicle:_vehicleDialog),
     ];
     return Scaffold(
@@ -710,6 +995,7 @@ class DriverPartnerHome extends StatelessWidget {
                 maxZoom: 19,
                 userAgentPackageName: 'com.allways.carrier',
               ),
+                const RichAttributionWidget(attributions: [TextSourceAttribution('© Mapbox'), TextSourceAttribution('© OpenStreetMap contributors')]),
               if (position != null)
                 MarkerLayer(
                   markers: [
@@ -804,6 +1090,7 @@ class DriverPartnerHome extends StatelessWidget {
               maxZoom: 19,
               userAgentPackageName: 'com.allways.carrier',
             ),
+                const RichAttributionWidget(attributions: [TextSourceAttribution('© Mapbox'), TextSourceAttribution('© OpenStreetMap contributors')]),
             if (position != null)
               MarkerLayer(
                 markers: [
@@ -889,7 +1176,7 @@ class RideRequests extends StatelessWidget{
   const RideRequests({super.key,required this.user,required this.online,required this.position,required this.vehicle,required this.activeRideId,required this.matchingRadiusKm,required this.onAccept,required this.onReject});
   double n(dynamic v)=>v is num?v.toDouble():double.tryParse((v??'').toString())??0;
   @override Widget build(BuildContext c)=>StreamBuilder<QuerySnapshot<Map<String,dynamic>>>(
-    stream:FirebaseFirestore.instance.collection('autoRideRequests').where('status',isEqualTo:'searching').snapshots(),
+    stream:FirebaseFirestore.instance.collection('rideOffers').doc(user.uid).collection('requests').where('status',isEqualTo:'searching').snapshots(),
     builder:(context,s){
       if(!online)return const Center(child:Text('Go online to receive ride requests.'));
       if(activeRideId!=null&&activeRideId!.isNotEmpty)return const Center(child:Padding(padding:EdgeInsets.all(28),child:Text('You already have an active ride. Complete it before accepting another ride.',textAlign:TextAlign.center)));
@@ -899,7 +1186,9 @@ class RideRequests extends StatelessWidget{
       for(final d in s.data!.docs){
         final x=d.data();
         final st=(x['status']??'').toString().trim().toLowerCase();
-        if(st!='searching')continue;
+        if(st!='searching' || x['rejected']==true)continue;
+        final expires=x['offerExpiresAt'];
+        if(expires is Timestamp && expires.toDate().isBefore(DateTime.now()))continue;
         if(x['customerActive']==false)continue;
         if(x['cancelledAt']!=null||x['completedAt']!=null||x['endedAt']!=null||x['rejectedAt']!=null||x['expiredAt']!=null)continue;
         final assignedUid=(x['driverUid']??x['carrierUid']??x['deliveryPartnerUid']??x['assignedPartnerId']??'').toString().trim();
@@ -1150,6 +1439,7 @@ class _ActiveRideState extends State<ActiveRide> {
                   maxZoom: 19,
                   userAgentPackageName: 'com.allways.carrier',
                 ),
+                const RichAttributionWidget(attributions: [TextSourceAttribution('© Mapbox'), TextSourceAttribution('© OpenStreetMap contributors')]),
                 if (route.isNotEmpty)
                   PolylineLayer(
                     polylines: [
@@ -1314,24 +1604,22 @@ class _DriverPartnerVehiclePageState extends State<DriverPartnerVehiclePage>{
       final cleanPhone=phone.text.replaceAll(RegExp(r'\D'),'');
       final cleanPrice=num.tryParse(price.text.trim())??0;
       if(cleanPhone.length!=10||cleanPrice<=0||pincode.text.trim().isEmpty){if(!mounted)return; ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Enter a valid phone, pincode and price.')));return;}
-      Position? currentPosition;
-      try {
-        if (await Geolocator.isLocationServiceEnabled()) {
-          var permission = await Geolocator.checkPermission();
-          if (permission == LocationPermission.denied) permission = await Geolocator.requestPermission();
-          if (permission == LocationPermission.whileInUse || permission == LocationPermission.always) {
-            currentPosition = await Geolocator.getCurrentPosition();
-          }
-        }
-      } catch (_) {}
-      await FirebaseFirestore.instance.collection('vehicles').add({
-        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Driver Partner','ownerPhone':cleanPhone,
+      // Vehicle listings are publicly readable for discovery; do not publish a
+      // driver's precise GPS position. City and pincode below are sufficient
+      // for discovery until a privacy-preserving geo-query backend is deployed.
+      final vehicleRef=FirebaseFirestore.instance.collection('vehicles').doc();
+      await FirebaseFirestore.instance.collection('vehicleOwnerContacts').doc(vehicleRef.id).set({
+        'vehicleId':vehicleRef.id,
+        'ownerUid':widget.user.uid,
+        'phone':cleanPhone,
+        'updatedAt':FieldValue.serverTimestamp(),
+      },SetOptions(merge:true));
+      await vehicleRef.set({
+        'ownerUid':widget.user.uid,'ownerName':widget.user.displayName??'ALLways Driver Partner',
         'category':category.value,'vehicleType':category.value,'price':cleanPrice,'pricePerKm':cleanPrice,'pricingUnit':'km','capacity':num.tryParse(capacity.text.trim())??0,
         'imageUrl':imageUrl.text.trim(),'vehicleImageUrl':imageUrl.text.trim(),
         'allowNegotiation':negotiate,'status':'available','listingStatus':'active','available':true,
         'manual_location':{'villageTownCity':city.text.trim(),'pincode':pincode.text.trim()},
-        'currentLocation':currentPosition==null?null:{'latitude':currentPosition.latitude,'longitude':currentPosition.longitude},
-        'latitude':currentPosition?.latitude,'longitude':currentPosition?.longitude,
         'createdAt':FieldValue.serverTimestamp(),'updatedAt':FieldValue.serverTimestamp(),
       });
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Vehicle listed successfully.')));
@@ -1458,11 +1746,12 @@ Future<void> _chooseAllwaysLanguage(BuildContext context) async {
 }
 
 class DriverPartnerProfile extends StatelessWidget{
-  final User user;final String vehicle;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;
-  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.onVehicle,required this.onSos,required this.onSupport});
+  final User user;final String vehicle;final bool notificationsEnabled;final Future<void> Function(bool) onNotifications;final Future<void> Function() onVehicle;final Future<void> Function() onSos;final VoidCallback onSupport;final Future<void> Function() onSignOut;
+  const DriverPartnerProfile({super.key,required this.user,required this.vehicle,required this.notificationsEnabled,required this.onNotifications,required this.onVehicle,required this.onSos,required this.onSupport,required this.onSignOut});
   @override Widget build(BuildContext c)=>ListView(padding:const EdgeInsets.fromLTRB(16,18,16,28),children:[
     const Text('Driver Partner Profile',style:TextStyle(fontSize:24,fontWeight:FontWeight.w900)),const SizedBox(height:12),
     Card(child:ListTile(leading:const Icon(Icons.person_outline,color:driverTeal),title:Text(user.displayName??'ALLways Driver Partner'),subtitle:Text(user.email??''))),
+    Card(child:SwitchListTile(secondary:const Icon(Icons.notifications_active_outlined,color:driverTeal),title:const Text('Notifications'),subtitle:const Text('Receive ride requests and ALLways announcements.'),value:notificationsEnabled,onChanged:(value){onNotifications(value);})),
     Card(child:ListTile(leading:const Icon(Icons.two_wheeler,color:driverTeal),title:const Text('Vehicle & Documents'),subtitle:Text('Vehicle type: '+vehicle),trailing:const Icon(Icons.chevron_right),onTap:onVehicle)),
     Card(child:ListTile(leading:const Icon(Icons.language,color:driverTeal),title:const Text('Language'),subtitle:const Text('English / हिन्दी'),trailing:const Icon(Icons.chevron_right),onTap:()=>_chooseAllwaysLanguage(c))),
     const Card(child:ListTile(leading:Icon(Icons.description_outlined),title:Text('Verification'),subtitle:Text('Keep identity and vehicle documents current.'))),
@@ -1470,7 +1759,8 @@ class DriverPartnerProfile extends StatelessWidget{
     Card(child:ListTile(leading:const Icon(Icons.currency_rupee,color:driverTeal),title:const Text('Earnings'),subtitle:const Text('Completed rides, fares and net earnings'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerEarnings(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.history,color:driverTeal),title:const Text('Ride History'),subtitle:const Text('View previous and cancelled rides'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>DriverPartnerRideHistory(user:user))))),
     Card(child:ListTile(leading:const Icon(Icons.help_outline),title:const Text('Help & Support'),subtitle:const Text('Contact ALLways operations for ride issues.'),trailing:const Icon(Icons.chevron_right),onTap:onSupport)),
-    Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:()=>FirebaseAuth.instance.signOut())),
+    Card(child:ListTile(leading:const Icon(Icons.security,color:driverTeal),title:const Text('Privacy & Account Security'),subtitle:const Text('Location privacy, data requests and grievance'),trailing:const Icon(Icons.chevron_right),onTap:()=>Navigator.push(c,MaterialPageRoute(builder:(_)=>AccountSecurityScreen(user:user,role:'carrier',repository:'mauryasujeet698-svg/ALLways-Carrier',accent:driverTeal))))),
+    Card(child:ListTile(leading:const Icon(Icons.logout),title:const Text('Sign out'),onTap:onSignOut)),
   ]);
 }
 
