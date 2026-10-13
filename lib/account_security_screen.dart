@@ -136,7 +136,7 @@ class _AccountSecurityScreenState extends State<AccountSecurityScreen> {
   }
 
   Future<void> _openReleases() async {
-    final uri = Uri.parse('https://github.com/${widget.repository}/releases');
+    final uri = Uri.parse('https://github.com/${widget.repository}/releases/download/allways-latest/allways-driver-partner-latest.apk');
     final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (mounted && !opened) {
       ScaffoldMessenger.of(context).showSnackBar(
