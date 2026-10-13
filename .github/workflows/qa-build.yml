@@ -8,7 +8,7 @@ on:
       - "lib/**"
       - "tool/**"
       - "pubspec.yaml"
-      - ".github/workflows/qa-build.yml"
+      - ".github/workflows/**"
   workflow_dispatch:
     inputs:
       publish_update:
