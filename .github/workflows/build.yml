@@ -3,6 +3,12 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish the tested APK to the public allways-latest release"
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -338,6 +344,7 @@ jobs:
           cp "release-assets/allways-driver-partner-v${{ env.APP_VERSION }}.apk" "release-assets/allways-driver-partner-latest.apk"
 
       - name: Publish latest APK release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_release == true }}
         uses: softprops/action-gh-release@v3
         with:
           tag_name: allways-latest
