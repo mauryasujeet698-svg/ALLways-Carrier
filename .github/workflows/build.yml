@@ -276,6 +276,10 @@ jobs:
           test -n "$AAPT"
           "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep -F "package: name='com.allways.carrier'"
           "$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | grep -F "application-label:'ALLways Driver Partner'"
+          TARGET_SDK=$("$AAPT" dump badging build/app/outputs/flutter-apk/app-release.apk | sed -n "s/.*targetSdkVersion:'\\([0-9][0-9]*\\)'.*/\\1/p")
+          test -n "$TARGET_SDK"
+          if [ "$TARGET_SDK" -lt 36 ]; then echo "::error::Google Play submission requires target SDK 36 or higher; found $TARGET_SDK."; exit 1; fi
+          echo "Verified target SDK: $TARGET_SDK"
 
       - name: Verify signed production APK
         shell: bash
