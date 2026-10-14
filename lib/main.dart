@@ -24,7 +24,9 @@ import 'shift_service.dart';
 const driverTeal=Color(0xFF0B6E69);
 const ivory=Color(0xFFF8F6F0);
 const _mapboxPublicToken = String.fromEnvironment('MAPBOX_PUBLIC_TOKEN');
-const _mapboxTilesUrl = 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=' + _mapboxPublicToken;
+const _mapboxTilesUrl = _mapboxPublicToken.isNotEmpty
+    ? 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}?access_token=$_mapboxPublicToken'
+    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 @pragma('vm:entry-point')
 Future<void> _background(RemoteMessage message) async { await Firebase.initializeApp(); }
 
