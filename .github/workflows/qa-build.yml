@@ -147,7 +147,7 @@ jobs:
           NODE_PATH=/tmp/allways-update-publisher/node_modules node tool/publish_update_manifest.cjs
 
       - name: Upload release candidate APK artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: allways-driver-partner-release-candidate-apk
           path: build/app/outputs/flutter-apk/app-release.apk
