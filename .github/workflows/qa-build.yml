@@ -117,7 +117,7 @@ jobs:
 
       - name: Publish in-app update release
         if: ${{ github.event_name == 'workflow_dispatch' && inputs.publish_update }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: allways-latest
           name: ALLways Driver Partner v${{ steps.app-version.outputs.version }}
